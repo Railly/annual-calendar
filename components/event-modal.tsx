@@ -120,7 +120,7 @@ export function EventModal({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="left" className="w-full sm:max-w-[440px] p-0 flex flex-col gap-0">
+      <SheetContent side="right" className="w-full sm:max-w-[440px] p-0 flex flex-col gap-0">
         {/* Header with colored accent */}
         <div className={cn("px-6 pt-6 pb-5 border-b", selectedTagColors?.light || "bg-muted")}>
           <div className="flex items-start justify-between">

@@ -615,65 +615,67 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
                   >
                     {row.map((day, colIndex) => {
                       if (!day) {
-                        return <div key={colIndex} className="h-[49px] bg-muted/20" />
+                        return <div key={colIndex} className="aspect-square bg-muted/20" data-cell />
                       }
 
-                      const isFirstOfMonth = day.dayOfMonth === 1
-                      const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6
-                      const past = isPastDay(day.date)
-                      const today = isToday(day.date)
+                      const dateStr = day.date.toISOString().split("T")[0]
                       const contribution = day.contribution
+                      const today = isToday(day.date)
+                      const past = isPastDay(day.date) && !today
+                      const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6
+                      const isMonthStart = day.dayOfMonth === 1
 
                       return (
-                        <GitHubDayTooltip key={colIndex} date={day.date} contribution={contribution}>
-                          <div
-                            className={cn(
-                              "h-[49px] border-r border-border/30 relative cursor-pointer transition-colors",
-                              isWeekend && "weekend-day",
-                              past && !today && "past-day-stripes",
-                              today && "today-highlight",
-                            )}
-                          >
-                            {/* Month label */}
-                            {isFirstOfMonth && (
-                              <div className="absolute -top-0 left-0 right-0 flex justify-center">
-                                <span className="bg-background px-1.5 py-0.5 text-[10px] font-bold text-foreground rounded-b border-x border-b border-border/50">
-                                  {MONTHS[day.month]}
-                                </span>
-                              </div>
-                            )}
+                        <div
+                          key={day.date.toISOString()}
+                          data-cell
+                          className={cn(
+                            "aspect-square border-r border-border/20 relative cursor-pointer transition-colors bg-background",
+                            isWeekend && "weekend-day",
+                            past && !today && "past-day-stripes",
+                            today && "today-highlight",
+                            isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
+                            "hover:bg-muted/30",
+                          )}
+                        >
+                          {/* Month label */}
+                          {isMonthStart && (
+                            <span className="absolute top-0.5 left-0.5 bg-zinc-700 dark:bg-zinc-600 text-white text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none z-10">
+                              {MONTHS[day.month]}
+                            </span>
+                          )}
 
-                            {/* Day header */}
-                            <div className="flex items-baseline justify-between px-1 pt-1">
-                              <span
-                                className={cn(
-                                  "text-[9px] font-medium uppercase",
-                                  today ? "today-text-light-muted" : "text-muted-foreground/60",
-                                  isWeekend && !today && "text-muted-foreground/80",
-                                )}
-                              >
-                                {DAYS[day.dayOfWeek]}
-                              </span>
-                              <span
-                                className={cn(
-                                  "text-sm font-bold",
-                                  today ? "today-text-light" : "text-foreground",
-                                  isWeekend && !today && "text-foreground/90",
-                                )}
-                              >
-                                {day.dayOfMonth}
-                              </span>
-                            </div>
-
-                            {/* Small heat indicator in top-left */}
-                            {contribution && contribution.commits > 0 && (
-                              <div
-                                className="absolute top-1 left-1 w-1.5 h-1.5 rounded-sm"
-                                style={{ backgroundColor: getContributionBg(contribution.level, isDark) }}
-                              />
-                            )}
+                          {/* Day header */}
+                          <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
+                            <span
+                              className={cn(
+                                "text-[7px] font-medium uppercase leading-none",
+                                today ? "today-text-light-muted" : "text-muted-foreground/60",
+                              )}
+                            >
+                              {DAYS[day.dayOfWeek]}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-[10px] font-bold leading-none",
+                                today ? "today-text-light" : "text-foreground",
+                              )}
+                            >
+                              {day.dayOfMonth}
+                            </span>
                           </div>
-                        </GitHubDayTooltip>
+
+                          {/* Small heat indicator in top-left */}
+                          {contribution && contribution.commits > 0 && (
+                            <div
+                              className={cn(
+                                "absolute w-1.5 h-1.5 rounded-sm",
+                                isMonthStart ? "top-3.5 left-0.5" : "top-0.5 left-0.5",
+                              )}
+                              style={{ backgroundColor: getContributionBg(contribution.level, isDark) }}
+                            />
+                          )}
+                        </div>
                       )
                     })}
                   </div>

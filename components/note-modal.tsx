@@ -36,7 +36,7 @@ export function NoteModal({ isOpen, onClose, date, existingNote, onSave }: NoteM
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="left" className="w-full sm:max-w-md p-0 flex flex-col border-r-0 shadow-2xl">
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col border-l-0 shadow-2xl">
         <div className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-muted rounded-lg">

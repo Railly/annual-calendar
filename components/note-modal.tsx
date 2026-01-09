@@ -2,12 +2,9 @@
 
 import type React from "react"
 import { useState } from "react"
+import { FileText, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 
 interface NoteModalProps {
   isOpen: boolean
@@ -17,93 +14,76 @@ interface NoteModalProps {
   onSave: (date: Date, note: string) => void
 }
 
-function NoteForm({
-  date,
-  existingNote,
-  onSave,
-  onClose,
-}: {
-  date: Date | null
-  existingNote?: string
-  onSave: (note: string) => void
-  onClose: () => void
-}) {
+export function NoteModal({ isOpen, onClose, date, existingNote, onSave }: NoteModalProps) {
   const [note, setNote] = useState(existingNote || "")
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!note.trim()) return
-    onSave(note)
+    if (!note.trim() || !date) return
+    onSave(date, note)
+    onClose()
   }
 
   const formattedDate = date?.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
-    year: "numeric",
   })
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm text-muted-foreground">{formattedDate}</p>
-      <div className="space-y-2">
-        <Label htmlFor="note">Journal Entry</Label>
-        <Textarea
-          id="note"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Write your thoughts..."
-          className="min-h-[150px] resize-none"
-          autoFocus
-        />
-      </div>
-      <div className="flex gap-3 justify-end">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white">
-          Save Note
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-export function NoteModal({ isOpen, onClose, date, existingNote, onSave }: NoteModalProps) {
-  const isMobile = useIsMobile()
-
-  const handleSave = (note: string) => {
-    if (date) {
-      onSave(date, note)
-    }
-    onClose()
-  }
+  const year = date?.getFullYear()
 
   if (!isOpen || !date) return null
 
-  if (isMobile) {
-    return (
-      <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Add Note</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-6">
-            <NoteForm date={date} existingNote={existingNote} onSave={handleSave} onClose={onClose} />
-          </div>
-        </DrawerContent>
-      </Drawer>
-    )
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add Note</DialogTitle>
-        </DialogHeader>
-        <NoteForm date={date} existingNote={existingNote} onSave={handleSave} onClose={onClose} />
-      </DialogContent>
-    </Dialog>
+    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent side="left" className="w-full sm:max-w-md p-0 flex flex-col border-r-0 shadow-2xl">
+        <div className="px-6 pt-6 pb-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-muted rounded-lg">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Journal Entry</h2>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                <Calendar className="h-3 w-3" />
+                <span>
+                  {formattedDate}, {year}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
+          <div className="flex-1 p-6">
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="What's on your mind today?"
+              className="w-full h-full min-h-[300px] resize-none bg-muted/30 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/20 text-sm leading-relaxed p-4 rounded-lg"
+              autoFocus
+            />
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t bg-muted/20">
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!note.trim()}>
+                Save Entry
+              </Button>
+            </div>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   )
 }

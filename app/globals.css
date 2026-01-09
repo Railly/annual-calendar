@@ -31,6 +31,29 @@
   --radius: 0.5rem;
 }
 
+/* Dark mode colors */
+.dark {
+  --background: oklch(0.12 0.01 260);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.15 0.01 260);
+  --card-foreground: oklch(0.95 0 0);
+  --popover: oklch(0.15 0.01 260);
+  --popover-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.6 0.12 175);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.22 0.01 260);
+  --secondary-foreground: oklch(0.9 0 0);
+  --muted: oklch(0.2 0.01 260);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.22 0.01 260);
+  --accent-foreground: oklch(0.9 0 0);
+  --destructive: oklch(0.5 0.15 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.25 0.01 260);
+  --input: oklch(0.22 0.01 260);
+  --ring: oklch(0.6 0.12 175);
+}
+
 /* Custom scrollbar styling for cleaner look */
 ::-webkit-scrollbar {
   width: 8px;
@@ -50,9 +73,12 @@
   background: oklch(0.75 0 0);
 }
 
-/* Hide default tooltip arrow completely */
-[data-radix-popper-content-wrapper] svg {
-  display: none !important;
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.35 0 0);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.45 0 0);
 }
 
 /* Yellow pulse animation for Today button */
@@ -71,7 +97,7 @@
   background-color: rgba(250, 204, 21, 0.3) !important;
 }
 
-/* Darker diagonal stripe pattern for past days - uses fixed attachment so stripes align across cells */
+/* Diagonal stripe pattern for past days - uses fixed attachment so stripes align across cells */
 .past-day-stripes {
   background-image: repeating-linear-gradient(
     -45deg,
@@ -83,10 +109,105 @@
   background-attachment: fixed;
 }
 
-/* Today highlight style - strong teal background only, no border */
+.dark .past-day-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.12) 2px,
+    rgba(255, 255, 255, 0.12) 3px
+  );
+}
+
+/* Today highlight - light mode uses dark bg, dark mode uses light bg with proper text colors */
 .today-highlight {
-  /* removed box-shadow border, keeping only bg color */
-  background-color: rgba(20, 184, 166, 0.2) !important;
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+.dark .today-highlight {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Today text colors - force dark text in dark mode */
+.today-text-light {
+  color: white !important;
+}
+
+.dark .today-text-light {
+  color: rgb(24, 24, 27) !important; /* zinc-900 */
+}
+
+.today-text-light-muted {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.dark .today-text-light-muted {
+  color: rgba(24, 24, 27, 0.7) !important;
+}
+
+/* Weekend styling - 20% darker */
+.weekend-day {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.dark .weekend-day {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Shimmer loading animation for AI dock */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.04) 20%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 80%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite ease-in-out;
+  pointer-events: none;
+}
+
+.dark .shimmer-loading::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 20%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 80%,
+    transparent 100%
+  );
+}
+
+/* Drag cursor styles */
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
+}
+
+.cursor-ew-resize {
+  cursor: ew-resize;
 }
 
 @theme inline {

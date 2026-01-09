@@ -1,29 +1,47 @@
 "use client"
 
-import { useState, useRef, useMemo } from "react"
-import { ChevronLeft, ChevronRight, FileText, ImageIcon, Plus } from "lucide-react"
+import type React from "react"
+
+import { useState, useRef, useMemo, useCallback, useEffect } from "react"
+import { ChevronLeft, ChevronRight, FileText, ImageIcon, Plus, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { type CalendarEvent, sampleEvents } from "@/lib/calendar-data"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { type CalendarEvent, type EventTag, defaultTags } from "@/lib/calendar-data"
+import { useSanityCalendar } from "@/hooks/use-sanity-calendar"
 import { EventModal } from "@/components/event-modal"
 import { NoteModal } from "@/components/note-modal"
 import { PhotoModal } from "@/components/photo-modal"
 import { EventTooltip } from "@/components/event-tooltip"
 import { EventContextMenu } from "@/components/event-context-menu"
+import { TagFilter } from "@/components/tag-filter"
+import { AIDock } from "@/components/ai-dock"
+import { DevModeOverlay } from "@/components/dev-mode-overlay"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
 const WEEK_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
-const EVENT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  orange: { bg: "bg-orange-500", text: "text-white", border: "border-orange-500" },
-  teal: { bg: "bg-teal-500", text: "text-white", border: "border-teal-500" },
-  purple: { bg: "bg-purple-500", text: "text-white", border: "border-purple-500" },
-  green: { bg: "bg-emerald-500", text: "text-white", border: "border-emerald-500" },
-  pink: { bg: "bg-pink-500", text: "text-white", border: "border-pink-500" },
-  blue: { bg: "bg-blue-500", text: "text-white", border: "border-blue-500" },
-  yellow: { bg: "bg-amber-400", text: "text-amber-900", border: "border-amber-400" },
-  red: { bg: "bg-red-500", text: "text-white", border: "border-red-500" },
+const TAG_COLORS: Record<string, { bg: string; text: string; border: string; darkBg: string }> = {
+  orange: { bg: "bg-orange-500", text: "text-white", border: "border-orange-500", darkBg: "dark:bg-orange-600/80" },
+  teal: { bg: "bg-teal-500", text: "text-white", border: "border-teal-500", darkBg: "dark:bg-teal-600/80" },
+  purple: { bg: "bg-purple-500", text: "text-white", border: "border-purple-500", darkBg: "dark:bg-purple-600/80" },
+  green: { bg: "bg-emerald-500", text: "text-white", border: "border-emerald-500", darkBg: "dark:bg-emerald-600/80" },
+  pink: { bg: "bg-pink-500", text: "text-white", border: "border-pink-500", darkBg: "dark:bg-pink-600/80" },
+  blue: { bg: "bg-blue-500", text: "text-white", border: "border-blue-500", darkBg: "dark:bg-blue-600/80" },
+  yellow: {
+    bg: "bg-amber-400",
+    text: "text-amber-900",
+    border: "border-amber-400",
+    darkBg: "dark:bg-amber-500/80 dark:text-amber-100",
+  },
+  red: { bg: "bg-red-500", text: "text-white", border: "border-red-500", darkBg: "dark:bg-red-600/80" },
+}
+
+function getEventColor(event: CalendarEvent, tags: EventTag[]) {
+  const tag = tags.find((t) => t.id === event.tag)
+  return TAG_COLORS[tag?.color || "blue"] || TAG_COLORS.blue
 }
 
 function isPastDay(date: Date) {
@@ -83,7 +101,13 @@ function isToday(date: Date) {
 }
 
 function getDateKey(date: Date) {
-  return date.toISOString().split("T")[0]
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
 }
 
 function DayView({
@@ -91,6 +115,7 @@ function DayView({
   month,
   day,
   events,
+  tags,
   dayPhotos,
   dayNotes,
   onDayClick,
@@ -101,6 +126,7 @@ function DayView({
   month: number
   day: number
   events: CalendarEvent[]
+  tags: EventTag[]
   dayPhotos: Map<string, string>
   dayNotes: Map<string, string>
   onDayClick: (date: Date) => void
@@ -153,13 +179,14 @@ function DayView({
           <div className="mb-6 space-y-2">
             <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">All Day Events</p>
             {dayEvents.map((event) => {
-              const colors = EVENT_COLORS[event.color] || EVENT_COLORS.blue
+              const colors = getEventColor(event, tags)
               return (
                 <EventContextMenu key={event.id} event={event} onEdit={onEventClick} onDelete={onDeleteEvent}>
                   <div
                     className={cn(
                       "px-4 py-3 rounded-lg text-sm font-medium cursor-pointer hover:opacity-90 transition-opacity",
                       colors.bg,
+                      colors.darkBg,
                       colors.text,
                     )}
                     onClick={() => onEventClick(event)}
@@ -195,6 +222,7 @@ function DayView({
 function WeekView({
   year,
   events,
+  tags,
   dayPhotos,
   onDayClick,
   onAddNote,
@@ -205,6 +233,7 @@ function WeekView({
 }: {
   year: number
   events: CalendarEvent[]
+  tags: EventTag[]
   dayPhotos: Map<string, string>
   onDayClick: (date: Date) => void
   onAddNote: (date: Date) => void
@@ -235,7 +264,7 @@ function WeekView({
                 key={day}
                 className={cn(
                   "h-12 flex items-center justify-center text-sm font-semibold border-l border-border",
-                  i >= 5 ? "bg-muted/50 text-muted-foreground" : "text-muted-foreground",
+                  i >= 5 ? "weekend-day text-muted-foreground" : "text-muted-foreground",
                 )}
               >
                 {day}
@@ -265,7 +294,7 @@ function WeekView({
                       return (
                         <div
                           key={`empty-${dayIndex}`}
-                          className={cn("h-20 border-l border-border/30", dayIndex >= 5 && "bg-muted/40")}
+                          className={cn("h-20 border-l border-border/30", dayIndex >= 5 && "weekend-day")}
                         />
                       )
                     }
@@ -284,8 +313,8 @@ function WeekView({
                         onClick={() => onDayClick(day.date)}
                         className={cn(
                           "h-20 border-l border-border/30 px-2 py-2 cursor-pointer transition-colors hover:bg-muted/30 relative group",
-                          isWeekend && "bg-muted/40",
-                          isMonthStart && "border-l-[3px] border-l-zinc-400",
+                          isWeekend && "weekend-day",
+                          isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
                           isTodayDate && "today-highlight",
                           isTodayDate && pulsingToday && "animate-today-pulse",
                           isPast && !isTodayDate && "past-day-stripes",
@@ -330,16 +359,14 @@ function WeekView({
 
                         <div className="flex items-center gap-1.5">
                           {isMonthStart && (
-                            <span className="bg-zinc-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide">
+                            <span className="bg-zinc-700 dark:bg-zinc-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide">
                               {MONTHS[month]}
                             </span>
                           )}
                           <span
                             className={cn(
                               "text-sm font-semibold",
-                              isTodayDate
-                                ? "bg-teal-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
-                                : "text-foreground",
+                              isTodayDate ? "text-white dark:text-zinc-900" : "text-foreground",
                             )}
                           >
                             {day.dayOfMonth}
@@ -349,11 +376,11 @@ function WeekView({
                         {dayEvents.length > 0 && (
                           <div className="absolute bottom-1.5 left-2 right-2 flex gap-0.5 overflow-hidden">
                             {dayEvents.slice(0, 3).map((event, idx) => {
-                              const colors = EVENT_COLORS[event.color] || EVENT_COLORS.blue
+                              const colors = getEventColor(event, tags)
                               return (
-                                <EventTooltip key={`${event.id}-${idx}`} event={event}>
+                                <EventTooltip key={`${event.id}-${idx}`} event={event} tags={tags}>
                                   <div
-                                    className={cn("h-1.5 flex-1 rounded-sm cursor-pointer", colors.bg)}
+                                    className={cn("h-1.5 flex-1 rounded-sm cursor-pointer", colors.bg, colors.darkBg)}
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       onEventClick(event)
@@ -380,27 +407,51 @@ function WeekView({
 function YearView({
   year,
   events,
+  tags,
   dayPhotos,
   onDayClick,
   onAddNote,
   onAddPhoto,
   onEventClick,
   onDeleteEvent,
+  onDuplicateEvent,
+  onChangeTag,
+  onExtendDay,
+  onShortenDay,
+  onUpdateEvent,
   pulsingToday,
 }: {
   year: number
   events: CalendarEvent[]
+  tags: EventTag[]
   dayPhotos: Map<string, string>
   onDayClick: (date: Date) => void
   onAddNote: (date: Date) => void
   onAddPhoto: (date: Date) => void
   onEventClick: (event: CalendarEvent) => void
   onDeleteEvent: (eventId: string) => void
+  onDuplicateEvent: (event: CalendarEvent) => void
+  onChangeTag: (event: CalendarEvent, newTagId: string) => void
+  onExtendDay: (event: CalendarEvent) => void
+  onShortenDay: (event: CalendarEvent) => void
+  onUpdateEvent: (event: CalendarEvent) => void
   pulsingToday?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
   const COLS = 21
   const ROWS = 18
+
+  const dragStateRef = useRef<{
+    eventId: string
+    type: "move" | "resize-start" | "resize-end"
+    startX: number
+    originalEvent: CalendarEvent
+    lastDaysDelta: number
+    hasDragged: boolean
+  } | null>(null)
+  const justFinishedDragRef = useRef(false)
+  const [, forceUpdate] = useState(0)
 
   const gridData = useMemo(() => {
     const grid: ({ date: Date; dayOfMonth: number; month: number; dayOfWeek: number; dayIndex: number } | null)[][] = []
@@ -415,7 +466,7 @@ function YearView({
         []
       for (let col = 0; col < COLS; col++) {
         if (dayIndex < totalDays) {
-          const date = new Date(year, 0, dayIndex + 1)
+          const date = new Date(year, 0, dayIndex + 1, 12, 0, 0, 0)
           rowData.push({
             date,
             dayOfMonth: date.getDate(),
@@ -432,6 +483,87 @@ function YearView({
     }
     return grid
   }, [year])
+
+  const getCellWidth = useCallback(() => {
+    if (!gridRef.current) return 50
+    return gridRef.current.offsetWidth / COLS
+  }, [])
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStateRef.current) return
+
+      const cellWidth = getCellWidth()
+      const deltaX = e.clientX - dragStateRef.current.startX
+      const daysDelta = Math.round(deltaX / cellWidth)
+
+      if (Math.abs(deltaX) > 3) {
+        dragStateRef.current.hasDragged = true
+      }
+
+      if (daysDelta === dragStateRef.current.lastDaysDelta) return
+      dragStateRef.current.lastDaysDelta = daysDelta
+
+      const { originalEvent, type } = dragStateRef.current
+      let newStartDate = new Date(originalEvent.startDate)
+      let newEndDate = new Date(originalEvent.endDate)
+
+      if (type === "move") {
+        newStartDate = addDays(new Date(originalEvent.startDate), daysDelta)
+        newEndDate = addDays(new Date(originalEvent.endDate), daysDelta)
+      } else if (type === "resize-start") {
+        newStartDate = addDays(new Date(originalEvent.startDate), daysDelta)
+        if (newStartDate > newEndDate) newStartDate = newEndDate
+      } else if (type === "resize-end") {
+        newEndDate = addDays(new Date(originalEvent.endDate), daysDelta)
+        if (newEndDate < newStartDate) newStartDate = newEndDate
+      }
+
+      onUpdateEvent({
+        ...originalEvent,
+        startDate: newStartDate,
+        endDate: newEndDate,
+      })
+    }
+
+    const handleMouseUp = () => {
+      if (dragStateRef.current) {
+        if (dragStateRef.current.hasDragged) {
+          justFinishedDragRef.current = true
+          setTimeout(() => {
+            justFinishedDragRef.current = false
+          }, 100)
+        }
+        dragStateRef.current = null
+        forceUpdate((n) => n + 1)
+      }
+    }
+
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [getCellWidth, onUpdateEvent])
+
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent, event: CalendarEvent, type: "move" | "resize-start" | "resize-end") => {
+      e.stopPropagation()
+      e.preventDefault()
+      dragStateRef.current = {
+        eventId: event.id,
+        type,
+        startX: e.clientX,
+        originalEvent: { ...event },
+        lastDaysDelta: 0,
+        hasDragged: false,
+      }
+      forceUpdate((n) => n + 1)
+    },
+    [],
+  )
 
   const eventPositions = useMemo(() => {
     const positions: {
@@ -525,9 +657,15 @@ function YearView({
     return byRow
   }, [eventPositions])
 
+  const isDragging = dragStateRef.current !== null
+
   return (
-    <div ref={scrollRef} className="flex-1 overflow-auto">
-      <div className="min-w-[1000px]">
+    <div
+      ref={scrollRef}
+      className={cn("h-full overflow-auto", isDragging && "select-none")}
+      style={isDragging ? { cursor: dragStateRef.current?.type === "move" ? "grabbing" : "ew-resize" } : undefined}
+    >
+      <div ref={gridRef} className="min-w-[1000px]">
         {gridData.map((row, rowIndex) => {
           const rowEvents = eventsByRow.get(rowIndex) || []
 
@@ -557,11 +695,11 @@ function YearView({
                   return (
                     <div
                       key={day.date.toISOString()}
-                      onClick={() => onDayClick(day.date)}
+                      onClick={() => !isDragging && onDayClick(day.date)}
                       className={cn(
                         "aspect-square bg-background border-r border-border/20 cursor-pointer transition-colors hover:bg-muted/30 relative group overflow-hidden",
-                        isWeekend && "bg-muted/40",
-                        isMonthStart && "border-l-[3px] border-l-zinc-400",
+                        isWeekend && "weekend-day",
+                        isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
                         isTodayDate && "today-highlight",
                         isTodayDate && pulsingToday && "animate-today-pulse",
                         isPast && !isTodayDate && "past-day-stripes",
@@ -605,23 +743,24 @@ function YearView({
                       </div>
 
                       {isMonthStart && (
-                        <span className="absolute top-0.5 left-0.5 bg-zinc-700 text-white text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none">
+                        <span className="absolute top-0.5 left-0.5 bg-zinc-700 dark:bg-zinc-600 text-white text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none">
                           {MONTHS[day.month]}
                         </span>
                       )}
 
                       <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
                         <span
-                          className={cn("text-[7px] font-medium uppercase leading-none", "text-muted-foreground/60")}
+                          className={cn(
+                            "text-[7px] font-medium uppercase leading-none",
+                            isTodayDate ? "text-amber-600 dark:text-amber-300" : "text-muted-foreground/60",
+                          )}
                         >
                           {DAYS[day.dayOfWeek]}
                         </span>
                         <span
                           className={cn(
                             "text-[10px] font-bold leading-none",
-                            isTodayDate
-                              ? "bg-teal-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px]"
-                              : "text-foreground",
+                            isTodayDate ? "text-amber-700 dark:text-amber-200" : "text-foreground",
                           )}
                         >
                           {day.dayOfMonth}
@@ -634,9 +773,10 @@ function YearView({
 
               <div className="absolute left-0 right-0 pointer-events-none" style={{ top: "20px" }}>
                 {rowEvents.map((pos, idx) => {
-                  const colors = EVENT_COLORS[pos.event.color] || EVENT_COLORS.blue
+                  const colors = getEventColor(pos.event, tags)
                   const leftPercent = (pos.startCol / COLS) * 100
                   const widthPercent = ((pos.endCol - pos.startCol + 1) / COLS) * 100
+                  const isDraggingThis = dragStateRef.current?.eventId === pos.event.id
 
                   return (
                     <EventContextMenu
@@ -644,27 +784,54 @@ function YearView({
                       event={pos.event}
                       onEdit={onEventClick}
                       onDelete={onDeleteEvent}
+                      onDuplicate={onDuplicateEvent}
+                      onChangeTag={onChangeTag}
+                      onExtendDay={onExtendDay}
+                      onShortenDay={onShortenDay}
                     >
-                      <EventTooltip event={pos.event}>
+                      <EventTooltip event={pos.event} tags={tags}>
                         <div
                           className={cn(
-                            "absolute h-[16px] flex items-center text-[9px] font-medium truncate pointer-events-auto cursor-pointer hover:brightness-110 transition-all",
+                            "absolute h-[16px] flex items-center text-[9px] font-medium truncate pointer-events-auto hover:brightness-110 transition-all group/event",
                             colors.bg,
+                            colors.darkBg,
                             colors.text,
                             pos.isStart ? "rounded-l pl-1" : "pl-0.5",
                             pos.isEnd ? "rounded-r pr-0.5" : "",
+                            isDraggingThis && "opacity-70 cursor-grabbing ring-2 ring-white/50",
                           )}
                           style={{
                             left: `calc(${leftPercent}% + 1px)`,
                             width: `calc(${widthPercent}% - 2px)`,
                             top: `${pos.slotIndex * 18}px`,
                           }}
+                          onMouseDown={(e) => handleDragStart(e, pos.event, "move")}
                           onClick={(e) => {
                             e.stopPropagation()
-                            onEventClick(pos.event)
+                            if (!isDragging && !justFinishedDragRef.current) {
+                              onEventClick(pos.event)
+                            }
                           }}
                         >
+                          {pos.isStart && (
+                            <div
+                              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/event:opacity-100 hover:bg-black/20 rounded-l"
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                handleDragStart(e, pos.event, "resize-start")
+                              }}
+                            />
+                          )}
                           {pos.isStart && pos.event.title}
+                          {pos.isEnd && (
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize opacity-0 group-hover/event:opacity-100 hover:bg-black/20 rounded-r"
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                handleDragStart(e, pos.event, "resize-end")
+                              }}
+                            />
+                          )}
                         </div>
                       </EventTooltip>
                     </EventContextMenu>
@@ -681,47 +848,43 @@ function YearView({
 
 export function AnnualCalendar() {
   const [year, setYear] = useState(2026)
-  const [events, setEvents] = useState<CalendarEvent[]>(sampleEvents)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [isEventModalOpen, setIsEventModalOpen] = useState(false)
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false)
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [editEvent, setEditEvent] = useState<CalendarEvent | null>(null)
-  const [view, setView] = useState<"Day" | "Week" | "Year">("Year")
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
-  const [currentDay, setCurrentDay] = useState(new Date().getDate())
-  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map())
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [dayPhotos, setDayPhotos] = useState<Map<string, string>>(new Map())
+  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map())
+  const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
+  const [isDevMode, setIsDevMode] = useState(false)
   const [pulsingToday, setPulsingToday] = useState(false)
+
+  const { events, tags, isLoading, createEvent, updateEvent, deleteEvent } = useSanityCalendar()
+
+  const [localEvents, setLocalEvents] = useState<CalendarEvent[]>([])
+
+  // Sync Sanity events to local state
+  useEffect(() => {
+    setLocalEvents(events)
+  }, [events])
+
+  const filteredEvents = useMemo(() => {
+    return localEvents.filter((event) => selectedTags.includes(event.tag))
+  }, [localEvents, selectedTags])
 
   const handlePrevYear = () => setYear((y) => y - 1)
   const handleNextYear = () => setYear((y) => y + 1)
 
-  const handlePrevDay = () => {
-    const currentDate = new Date(year, currentMonth, currentDay)
-    currentDate.setDate(currentDate.getDate() - 1)
-    setCurrentDay(currentDate.getDate())
-    setCurrentMonth(currentDate.getMonth())
-    setYear(currentDate.getFullYear())
-  }
-
-  const handleNextDay = () => {
-    const currentDate = new Date(year, currentMonth, currentDay)
-    currentDate.setDate(currentDate.getDate() + 1)
-    setCurrentDay(currentDate.getDate())
-    setCurrentMonth(currentDate.getMonth())
-    setYear(currentDate.getFullYear())
-  }
-
   const handleDayClick = (date: Date) => {
     setSelectedDate(date)
-    setEditEvent(null)
+    setEditingEvent(null)
     setIsEventModalOpen(true)
   }
 
   const handleEventClick = (event: CalendarEvent) => {
-    setSelectedDate(new Date(event.startDate))
-    setEditEvent(event)
+    if (justFinishedDragRef.current) return
+    setEditingEvent(event)
+    setSelectedDate(event.startDate)
     setIsEventModalOpen(true)
   }
 
@@ -735,196 +898,235 @@ export function AnnualCalendar() {
     setIsPhotoModalOpen(true)
   }
 
-  const handleSaveNote = (date: Date, note: string) => {
-    const key = getDateKey(date)
-    setDayNotes((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(key, note)
-      return newMap
-    })
-  }
-
-  const handleSavePhoto = (date: Date, photoUrl: string) => {
-    const key = getDateKey(date)
-    setDayPhotos((prev) => {
-      const newMap = new Map(prev)
-      newMap.set(key, photoUrl)
-      return newMap
-    })
-  }
-
-  const handleRemovePhoto = (date: Date) => {
-    const key = getDateKey(date)
-    setDayPhotos((prev) => {
-      const newMap = new Map(prev)
-      newMap.delete(key)
-      return newMap
-    })
-  }
-
-  const handleAddEvent = (event: CalendarEvent) => {
-    setEvents((prev) => [...prev, event])
-  }
-
-  const handleUpdateEvent = (event: CalendarEvent) => {
-    setEvents((prev) => prev.map((e) => (e.id === event.id ? event : e)))
-  }
-
-  const handleDeleteEvent = (eventId: string) => {
-    setEvents((prev) => prev.filter((e) => e.id !== eventId))
-  }
-
-  const handleGoToToday = () => {
-    const today = new Date()
-    setYear(today.getFullYear())
-    setCurrentMonth(today.getMonth())
-    setCurrentDay(today.getDate())
-    setPulsingToday(true)
-    setTimeout(() => setPulsingToday(false), 1600) // 2 pulses at 0.8s each
-  }
-
-  const getHeaderTitle = () => {
-    if (view === "Day") {
-      const date = new Date(year, currentMonth, currentDay)
-      return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id"> & { id?: string }) => {
+    try {
+      if (editingEvent) {
+        const updatedEvent = { ...editingEvent, ...eventData }
+        await updateEvent(updatedEvent)
+        setLocalEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updatedEvent : e)))
+      } else {
+        const newEvent = await createEvent(eventData)
+        const fullEvent: CalendarEvent = {
+          id: newEvent.id || Date.now().toString(),
+          ...eventData,
+        }
+        setLocalEvents((prev) => [...prev, fullEvent])
+      }
+    } catch (error) {
+      // Fallback to local-only if API fails
+      if (editingEvent) {
+        setLocalEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? { ...editingEvent, ...eventData } : e)))
+      } else {
+        const newEvent: CalendarEvent = {
+          id: Date.now().toString(),
+          ...eventData,
+        }
+        setLocalEvents((prev) => [...prev, newEvent])
+      }
     }
-    return year.toString()
+    setIsEventModalOpen(false)
+    setEditingEvent(null)
   }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    try {
+      await deleteEvent(eventId)
+    } catch (error) {
+      // Continue with local delete even if API fails
+    }
+    setLocalEvents((prev) => prev.filter((e) => e.id !== eventId))
+    setIsEventModalOpen(false)
+    setEditingEvent(null)
+  }
+
+  const handleDuplicateEvent = async (event: CalendarEvent) => {
+    const duplicatedEvent = {
+      title: `${event.title} (copy)`,
+      description: event.description,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      tag: event.tag,
+    }
+    try {
+      const newEvent = await createEvent(duplicatedEvent)
+      setLocalEvents((prev) => [...prev, { ...duplicatedEvent, id: newEvent.id || Date.now().toString() }])
+    } catch (error) {
+      setLocalEvents((prev) => [...prev, { ...duplicatedEvent, id: Date.now().toString() }])
+    }
+  }
+
+  const handleChangeTag = async (event: CalendarEvent, newTagId: string) => {
+    const updatedEvent = { ...event, tag: newTagId }
+    try {
+      await updateEvent(updatedEvent)
+    } catch (error) {
+      // Continue with local update
+    }
+    setLocalEvents((prev) => prev.map((e) => (e.id === event.id ? updatedEvent : e)))
+  }
+
+  const handleExtendDay = async (event: CalendarEvent) => {
+    const newEndDate = new Date(event.endDate)
+    newEndDate.setDate(newEndDate.getDate() + 1)
+    const updatedEvent = { ...event, endDate: newEndDate }
+    try {
+      await updateEvent(updatedEvent)
+    } catch (error) {
+      // Continue with local update
+    }
+    setLocalEvents((prev) => prev.map((e) => (e.id === event.id ? updatedEvent : e)))
+  }
+
+  const handleShortenDay = async (event: CalendarEvent) => {
+    const newEndDate = new Date(event.endDate)
+    newEndDate.setDate(newEndDate.getDate() - 1)
+    if (newEndDate >= event.startDate) {
+      const updatedEvent = { ...event, endDate: newEndDate }
+      try {
+        await updateEvent(updatedEvent)
+      } catch (error) {
+        // Continue with local update
+      }
+      setLocalEvents((prev) => prev.map((e) => (e.id === event.id ? updatedEvent : e)))
+    }
+  }
+
+  const handleUpdateEvent = async (event: CalendarEvent) => {
+    try {
+      await updateEvent(event)
+    } catch (error) {
+      // Continue with local update
+    }
+    setLocalEvents((prev) => prev.map((e) => (e.id === event.id ? event : e)))
+  }
+
+  const handleSaveNote = (content: string) => {
+    if (selectedDate) {
+      const dateKey = getDateKey(selectedDate)
+      setDayNotes((prev) => new Map(prev).set(dateKey, content))
+    }
+    setIsNoteModalOpen(false)
+  }
+
+  const handleSavePhoto = (photoUrl: string) => {
+    if (selectedDate) {
+      const dateKey = getDateKey(selectedDate)
+      setDayPhotos((prev) => new Map(prev).set(dateKey, photoUrl))
+    }
+    setIsPhotoModalOpen(false)
+  }
+
+  const handleAddEventsFromAI = async (newEvents: Omit<CalendarEvent, "id">[]) => {
+    for (const eventData of newEvents) {
+      try {
+        const newEvent = await createEvent(eventData)
+        setLocalEvents((prev) => [...prev, { ...eventData, id: newEvent.id || Date.now().toString() }])
+      } catch (error) {
+        setLocalEvents((prev) => [...prev, { ...eventData, id: Date.now().toString() }])
+      }
+    }
+  }
+
+  const justFinishedDragRef = useRef(false)
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <header className="border-b border-border px-3 py-2 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-0.5">
-          {(["Day", "Week", "Year"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={cn(
-                "px-3 py-1 text-sm font-medium rounded-md transition-colors",
-                view === v ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {view === "Day" && (
-            <>
-              <Button size="icon" variant="ghost" onClick={handlePrevDay} className="h-7 w-7">
+    <TooltipProvider delayDuration={1200}>
+      <div className="h-screen flex flex-col bg-background relative">
+        {/* Header */}
+        <header className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center justify-between px-4 h-12">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setYear(year - 1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-semibold min-w-[180px] text-center">{getHeaderTitle()}</span>
-              <Button size="icon" variant="ghost" onClick={handleNextDay} className="h-7 w-7">
+              <span className="text-lg font-semibold min-w-[60px] text-center">{year}</span>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setYear(year + 1)}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </>
-          )}
-          {(view === "Week" || view === "Year") && (
-            <>
-              <Button size="icon" variant="ghost" onClick={handlePrevYear} className="h-7 w-7">
-                <ChevronLeft className="h-4 w-4" />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <TagFilter tags={tags} selectedTags={selectedTags} onTagsChange={setSelectedTags} />
+
+              <Button
+                variant={isDevMode ? "default" : "outline"}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setIsDevMode(!isDevMode)}
+              >
+                <Code className="h-3.5 w-3.5" />
+                Dev
               </Button>
-              <span className="text-lg font-bold min-w-[60px] text-center">{year}</span>
-              <Button size="icon" variant="ghost" onClick={handleNextYear} className="h-7 w-7">
-                <ChevronRight className="h-4 w-4" />
+
+              <ThemeToggle />
+
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => handleDayClick(new Date())}>
+                <Plus className="h-3.5 w-3.5" />
+                Event
               </Button>
-            </>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 min-h-0 relative">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-muted-foreground">Loading calendar...</div>
+            </div>
+          ) : (
+            <YearView
+              year={year}
+              events={filteredEvents}
+              tags={tags}
+              dayPhotos={dayPhotos}
+              onDayClick={handleDayClick}
+              onAddNote={handleAddNote}
+              onAddPhoto={handleAddPhoto}
+              onEventClick={handleEventClick}
+              onDeleteEvent={handleDeleteEvent}
+              onDuplicateEvent={handleDuplicateEvent}
+              onChangeTag={handleChangeTag}
+              onExtendDay={handleExtendDay}
+              onShortenDay={handleShortenDay}
+              onUpdateEvent={handleUpdateEvent}
+              pulsingToday={pulsingToday}
+            />
           )}
+
+          {isDevMode && <DevModeOverlay onClose={() => setIsDevMode(false)} />}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleGoToToday} className="text-xs h-7">
-            Today
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setSelectedDate(new Date())
-              setEditEvent(null)
-              setIsEventModalOpen(true)
-            }}
-            className="h-7 gap-1"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Event</span>
-          </Button>
-        </div>
-      </header>
+        <AIDock tags={tags} onAddEvents={handleAddEventsFromAI} />
 
-      <div className="flex-1 flex overflow-hidden">
-        {view === "Day" && (
-          <DayView
-            year={year}
-            month={currentMonth}
-            day={currentDay}
-            events={events}
-            dayPhotos={dayPhotos}
-            dayNotes={dayNotes}
-            onDayClick={handleDayClick}
-            onEventClick={handleEventClick}
-            onDeleteEvent={handleDeleteEvent}
-          />
-        )}
-        {view === "Week" && (
-          <WeekView
-            year={year}
-            events={events}
-            dayPhotos={dayPhotos}
-            onDayClick={handleDayClick}
-            onAddNote={handleAddNote}
-            onAddPhoto={handleAddPhoto}
-            onEventClick={handleEventClick}
-            onDeleteEvent={handleDeleteEvent}
-            pulsingToday={pulsingToday}
-          />
-        )}
-        {view === "Year" && (
-          <YearView
-            year={year}
-            events={events}
-            dayPhotos={dayPhotos}
-            onDayClick={handleDayClick}
-            onAddNote={handleAddNote}
-            onAddPhoto={handleAddPhoto}
-            onEventClick={handleEventClick}
-            onDeleteEvent={handleDeleteEvent}
-            pulsingToday={pulsingToday}
-          />
-        )}
+        {/* Modals */}
+        <EventModal
+          isOpen={isEventModalOpen}
+          onClose={() => {
+            setIsEventModalOpen(false)
+            setEditingEvent(null)
+          }}
+          onSave={handleSaveEvent}
+          onDelete={editingEvent ? () => handleDeleteEvent(editingEvent.id) : undefined}
+          event={editingEvent}
+          defaultDate={selectedDate || new Date()}
+          tags={tags}
+        />
+
+        <NoteModal
+          isOpen={isNoteModalOpen}
+          onClose={() => setIsNoteModalOpen(false)}
+          onSave={handleSaveNote}
+          date={selectedDate || new Date()}
+          existingNote={selectedDate ? dayNotes.get(getDateKey(selectedDate)) : undefined}
+        />
+
+        <PhotoModal
+          isOpen={isPhotoModalOpen}
+          onClose={() => setIsPhotoModalOpen(false)}
+          onSave={handleSavePhoto}
+          date={selectedDate || new Date()}
+        />
       </div>
-
-      <EventModal
-        isOpen={isEventModalOpen}
-        onClose={() => {
-          setIsEventModalOpen(false)
-          setEditEvent(null)
-        }}
-        date={selectedDate}
-        events={events}
-        onAddEvent={handleAddEvent}
-        onUpdateEvent={handleUpdateEvent}
-        onDeleteEvent={handleDeleteEvent}
-        editEvent={editEvent}
-      />
-
-      <NoteModal
-        isOpen={isNoteModalOpen}
-        onClose={() => setIsNoteModalOpen(false)}
-        date={selectedDate}
-        existingNote={selectedDate ? dayNotes.get(getDateKey(selectedDate)) : undefined}
-        onSave={handleSaveNote}
-      />
-
-      <PhotoModal
-        isOpen={isPhotoModalOpen}
-        onClose={() => setIsPhotoModalOpen(false)}
-        date={selectedDate}
-        existingPhoto={selectedDate ? dayPhotos.get(getDateKey(selectedDate)) : undefined}
-        onSave={handleSavePhoto}
-        onRemove={handleRemovePhoto}
-      />
-    </div>
+    </TooltipProvider>
   )
 }

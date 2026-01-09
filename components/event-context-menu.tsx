@@ -49,6 +49,7 @@ export function EventContextMenu({
   onShortenDay,
 }: EventContextMenuProps) {
   const eventDuration = Math.ceil((event.endDate.getTime() - event.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  const safeTags = tags || []
 
   return (
     <ContextMenu>
@@ -68,14 +69,14 @@ export function EventContextMenu({
 
         <ContextMenuSeparator />
 
-        {onChangeTag && (
+        {onChangeTag && safeTags.length > 0 && (
           <ContextMenuSub>
             <ContextMenuSubTrigger className="gap-2">
               <Tag className="h-4 w-4" />
               Change Tag
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-              {tags.map((tag) => (
+              {safeTags.map((tag) => (
                 <ContextMenuItem
                   key={tag.id}
                   onClick={() => onChangeTag(event, tag.id)}

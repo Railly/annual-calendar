@@ -3,7 +3,19 @@
 import type React from "react"
 
 import { useMemo, useRef, useState } from "react"
-import { GitCommit, GitPullRequest, GitMerge, Plus, Minus, Flame, Trophy, Code2, X, FileCode } from "lucide-react"
+import {
+  GitCommit,
+  GitPullRequest,
+  GitMerge,
+  Plus,
+  Minus,
+  Flame,
+  Trophy,
+  Code2,
+  X,
+  FileCode,
+  BarChart3,
+} from "lucide-react"
 import { useTheme } from "next-themes"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
@@ -22,19 +34,66 @@ const COLS = 21
 const ROWS = 18
 const MAX_SWIMLANES_PER_ROW = 2
 
-const REPO_COLORS: Record<string, { borderColor: string; lightFill: string; textDark: string }> = {
-  "annual-calendar-2026": { borderColor: "#3b82f6", lightFill: "rgba(59,130,246,0.15)", textDark: "#1e40af" },
-  "sanity-cms-integration": { borderColor: "#f97316", lightFill: "rgba(249,115,22,0.15)", textDark: "#c2410c" },
-  "ai-event-parser": { borderColor: "#a855f7", lightFill: "rgba(168,85,247,0.15)", textDark: "#7c3aed" },
-  "nextjs-starter": { borderColor: "#10b981", lightFill: "rgba(16,185,129,0.15)", textDark: "#047857" },
-  "design-system": { borderColor: "#ec4899", lightFill: "rgba(236,72,153,0.15)", textDark: "#be185d" },
-  "api-gateway": { borderColor: "#14b8a6", lightFill: "rgba(20,184,166,0.15)", textDark: "#0f766e" },
-  "mobile-app": { borderColor: "#ef4444", lightFill: "rgba(239,68,68,0.15)", textDark: "#dc2626" },
-  "docs-site": { borderColor: "#f59e0b", lightFill: "rgba(245,158,11,0.15)", textDark: "#b45309" },
+const REPO_COLORS: Record<string, { borderColor: string; lightFill: string; textDark: string; textLight: string }> = {
+  "annual-calendar-2026": {
+    borderColor: "#3b82f6",
+    lightFill: "rgba(59,130,246,0.15)",
+    textDark: "#1e40af",
+    textLight: "#ffffff",
+  },
+  "sanity-cms-integration": {
+    borderColor: "#f97316",
+    lightFill: "rgba(249,115,22,0.15)",
+    textDark: "#c2410c",
+    textLight: "#ffffff",
+  },
+  "ai-event-parser": {
+    borderColor: "#a855f7",
+    lightFill: "rgba(168,85,247,0.15)",
+    textDark: "#7c3aed",
+    textLight: "#ffffff",
+  },
+  "nextjs-starter": {
+    borderColor: "#10b981",
+    lightFill: "rgba(16,185,129,0.15)",
+    textDark: "#047857",
+    textLight: "#ffffff",
+  },
+  "design-system": {
+    borderColor: "#ec4899",
+    lightFill: "rgba(236,72,153,0.15)",
+    textDark: "#be185d",
+    textLight: "#ffffff",
+  },
+  "api-gateway": {
+    borderColor: "#14b8a6",
+    lightFill: "rgba(20,184,166,0.15)",
+    textDark: "#0f766e",
+    textLight: "#ffffff",
+  },
+  "mobile-app": {
+    borderColor: "#ef4444",
+    lightFill: "rgba(239,68,68,0.15)",
+    textDark: "#dc2626",
+    textLight: "#ffffff",
+  },
+  "docs-site": {
+    borderColor: "#f59e0b",
+    lightFill: "rgba(245,158,11,0.15)",
+    textDark: "#92400e",
+    textLight: "#000000",
+  },
 }
 
 function getRepoColor(repo: string) {
-  return REPO_COLORS[repo] || { borderColor: "#6b7280", lightFill: "rgba(107,114,128,0.15)", textDark: "#4b5563" }
+  return (
+    REPO_COLORS[repo] || {
+      borderColor: "#6b7280",
+      lightFill: "rgba(107,114,128,0.15)",
+      textDark: "#4b5563",
+      textLight: "#ffffff",
+    }
+  )
 }
 
 function isPastDay(date: Date) {
@@ -61,6 +120,7 @@ function formatNumber(num: number): string {
   return num.toString()
 }
 
+// ... existing GitHubDayTooltip component ...
 function GitHubDayTooltip({
   children,
   date,
@@ -134,6 +194,7 @@ function GitHubDayTooltip({
   )
 }
 
+// ... existing SessionDetailSheet component ...
 function SessionDetailSheet({
   session,
   open,
@@ -256,11 +317,117 @@ function SessionDetailSheet({
   )
 }
 
-interface GitHubYearViewProps {
-  year: number
+export function StatsDialog({ year }: { year: number }) {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
+  const githubData = useMemo(() => generateGitHubYearData(year), [year])
+
+  return (
+    <DialogPrimitive.Root>
+      <DialogPrimitive.Trigger asChild>
+        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+          <BarChart3 className="h-3.5 w-3.5" />
+          Stats
+        </button>
+      </DialogPrimitive.Trigger>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 bg-black/40 z-50 animate-in fade-in-0 duration-200" />
+        <DialogPrimitive.Content className="fixed right-0 top-0 h-full w-full max-w-sm bg-background border-l border-border shadow-2xl z-50 animate-in slide-in-from-right duration-300 overflow-y-auto">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-foreground">Year in Code</h2>
+              <DialogPrimitive.Close asChild>
+                <button className="p-2 rounded-md hover:bg-muted transition-colors">
+                  <X className="h-5 w-5 text-muted-foreground" />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <GitCommit className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm text-muted-foreground">Total Commits</span>
+                </div>
+                <p className="text-3xl font-bold text-foreground">{formatNumber(githubData.totalCommits)}</p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <GitMerge className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm text-muted-foreground">PRs Merged</span>
+                </div>
+                <p className="text-3xl font-bold text-foreground">{githubData.totalPRsMerged}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Plus className="h-4 w-4 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Lines Added</span>
+                  </div>
+                  <p className="text-xl font-bold text-green-600 dark:text-green-400">
+                    {formatNumber(githubData.totalLinesAdded)}
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Minus className="h-4 w-4 text-red-500" />
+                    <span className="text-xs text-muted-foreground">Lines Deleted</span>
+                  </div>
+                  <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                    {formatNumber(githubData.totalLinesDeleted)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Flame className="h-4 w-4 text-orange-500" />
+                    <span className="text-xs text-muted-foreground">Current Streak</span>
+                  </div>
+                  <p className="text-xl font-bold text-foreground">{githubData.currentStreak} days</p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Trophy className="h-4 w-4 text-yellow-500" />
+                    <span className="text-xs text-muted-foreground">Longest Streak</span>
+                  </div>
+                  <p className="text-xl font-bold text-foreground">{githubData.longestStreak} days</p>
+                </div>
+              </div>
+
+              {/* Contribution legend */}
+              <div className="p-4 rounded-lg bg-muted/50">
+                <p className="text-xs text-muted-foreground mb-2">Contribution Levels</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Less</span>
+                  {[0, 1, 2, 3, 4].map((level) => (
+                    <div
+                      key={level}
+                      className="w-4 h-4 rounded-sm"
+                      style={{ backgroundColor: getContributionBg(level as 0 | 1 | 2 | 3 | 4, isDark) }}
+                    />
+                  ))}
+                  <span className="text-xs text-muted-foreground">More</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  )
 }
 
-export function GitHubYearView({ year }: GitHubYearViewProps) {
+interface GitHubYearViewProps {
+  year: number
+  selectedRepos: string[]
+  onReposChange: (repos: string[]) => void
+}
+
+export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYearViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const { resolvedTheme } = useTheme()
@@ -271,6 +438,31 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
 
   const githubData = useMemo(() => generateGitHubYearData(year), [year])
   const repoSessions = useMemo(() => generateRepoSessions(githubData.contributions), [githubData])
+
+  const allRepos = useMemo(() => {
+    const repoSet = new Set<string>()
+    repoSessions.forEach((session) => repoSet.add(session.repo))
+    return Array.from(repoSet).map((name) => ({
+      name,
+      color: getRepoColor(name).borderColor,
+    }))
+  }, [repoSessions])
+
+  // Update selected repos when allRepos changes
+  useMemo(() => {
+    const repoNames = allRepos.map((r) => r.name)
+    onReposChange((prev) => {
+      // Keep only repos that still exist, add new ones
+      const filtered = prev.filter((r) => repoNames.includes(r))
+      const newRepos = repoNames.filter((r) => !prev.includes(r))
+      return [...filtered, ...newRepos]
+    })
+  }, [allRepos])
+
+  // Filter sessions by selected repos
+  const filteredSessions = useMemo(() => {
+    return repoSessions.filter((session) => selectedRepos.includes(session.repo))
+  }, [repoSessions, selectedRepos])
 
   const gridData = useMemo(() => {
     const grid: ({
@@ -323,7 +515,7 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
 
     const rowSlots: Map<number, Set<number>[]> = new Map()
 
-    repoSessions.forEach((session) => {
+    filteredSessions.forEach((session) => {
       const sessionStart = new Date(session.startDate + "T00:00:00")
       const sessionEnd = new Date(session.endDate + "T23:59:59")
 
@@ -388,7 +580,7 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
     })
 
     return positions
-  }, [repoSessions, gridData])
+  }, [filteredSessions, gridData])
 
   const sessionsByRow = useMemo(() => {
     const byRow: Map<number, typeof sessionPositions> = new Map()
@@ -409,92 +601,6 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
   return (
     <TooltipPrimitive.Provider delayDuration={800} skipDelayDuration={300}>
       <div className="h-full flex flex-col">
-        {/* Stats Header */}
-        <div className="flex-shrink-0 border-b border-border bg-background/80 backdrop-blur-sm px-4 py-3">
-          <div className="flex items-center justify-between gap-6 max-w-full overflow-x-auto">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-emerald-500/10">
-                  <GitCommit className="h-4 w-4 text-emerald-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Commits</p>
-                  <p className="text-lg font-bold text-foreground">{formatNumber(githubData.totalCommits)}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-purple-500/10">
-                  <GitMerge className="h-4 w-4 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">PRs Merged</p>
-                  <p className="text-lg font-bold text-foreground">{githubData.totalPRsMerged}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-green-500/10">
-                  <Plus className="h-4 w-4 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Lines Added</p>
-                  <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                    {formatNumber(githubData.totalLinesAdded)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-red-500/10">
-                  <Minus className="h-4 w-4 text-red-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Lines Deleted</p>
-                  <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                    {formatNumber(githubData.totalLinesDeleted)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-orange-500/10">
-                  <Flame className="h-4 w-4 text-orange-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Current Streak</p>
-                  <p className="text-lg font-bold text-foreground">{githubData.currentStreak} days</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-yellow-500/10">
-                  <Trophy className="h-4 w-4 text-yellow-500" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Longest Streak</p>
-                  <p className="text-lg font-bold text-foreground">{githubData.longestStreak} days</p>
-                </div>
-              </div>
-
-              {/* Contribution legend */}
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span>Less</span>
-                {[0, 1, 2, 3, 4].map((level) => (
-                  <div
-                    key={level}
-                    className="w-3 h-3 rounded-sm"
-                    style={{ backgroundColor: getContributionBg(level as 0 | 1 | 2 | 3 | 4, isDark) }}
-                  />
-                ))}
-                <span>More</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Calendar Grid */}
         <div ref={scrollRef} className="flex-1 overflow-auto">
           <div ref={gridRef} className="min-w-[1000px]">
@@ -509,139 +615,112 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
                   >
                     {row.map((day, colIndex) => {
                       if (!day) {
-                        return (
-                          <div
-                            key={`empty-${rowIndex}-${colIndex}`}
-                            className="aspect-square bg-background border-r border-border/20"
-                          />
-                        )
+                        return <div key={colIndex} className="h-[49px] bg-muted/20" />
                       }
 
-                      const isMonthStart = day.dayOfMonth === 1
-                      const isTodayDate = isToday(day.date)
-                      const isPast = isPastDay(day.date) && !isTodayDate
+                      const isFirstOfMonth = day.dayOfMonth === 1
                       const isWeekend = day.dayOfWeek === 0 || day.dayOfWeek === 6
-                      const contrib = day.contribution
-                      const hasActivity = contrib && contrib.commits > 0
+                      const past = isPastDay(day.date)
+                      const today = isToday(day.date)
+                      const contribution = day.contribution
 
                       return (
-                        <GitHubDayTooltip key={day.date.toISOString()} date={day.date} contribution={contrib}>
+                        <GitHubDayTooltip key={colIndex} date={day.date} contribution={contribution}>
                           <div
-                            data-cell
                             className={cn(
-                              "aspect-square border-r border-border/20 cursor-default transition-all relative overflow-hidden",
-                              isTodayDate && "today-highlight",
-                              isPast && "past-day-stripes",
-                              isWeekend && !isTodayDate && "weekend-day",
-                              !isWeekend && !isTodayDate && !isPast && "bg-background",
-                              isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
+                              "h-[49px] border-r border-border/30 relative cursor-pointer transition-colors",
+                              isWeekend && "weekend-day",
+                              past && !today && "past-day-stripes",
+                              today && "today-highlight",
                             )}
                           >
-                            {hasActivity && (
-                              <div
-                                className="absolute top-0.5 left-0.5 w-1.5 h-1.5 rounded-[2px]"
-                                style={{
-                                  backgroundColor: getContributionBg(contrib.level, isDark),
-                                }}
-                              />
-                            )}
-
                             {/* Month label */}
-                            {isMonthStart && (
-                              <span className="absolute top-0.5 left-2.5 bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-800 text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none z-10">
-                                {MONTHS[day.month]}
-                              </span>
+                            {isFirstOfMonth && (
+                              <div className="absolute -top-0 left-0 right-0 flex justify-center">
+                                <span className="bg-background px-1.5 py-0.5 text-[10px] font-bold text-foreground rounded-b border-x border-b border-border/50">
+                                  {MONTHS[day.month]}
+                                </span>
+                              </div>
                             )}
 
-                            {/* Day info */}
-                            <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
+                            {/* Day header */}
+                            <div className="flex items-baseline justify-between px-1 pt-1">
                               <span
                                 className={cn(
-                                  "text-[7px] font-medium uppercase leading-none",
-                                  isTodayDate
-                                    ? "today-text-light-muted"
-                                    : isWeekend
-                                      ? "text-muted-foreground/80"
-                                      : "text-muted-foreground/60",
+                                  "text-[9px] font-medium uppercase",
+                                  today ? "today-text-light-muted" : "text-muted-foreground/60",
+                                  isWeekend && !today && "text-muted-foreground/80",
                                 )}
                               >
                                 {DAYS[day.dayOfWeek]}
                               </span>
                               <span
                                 className={cn(
-                                  "text-[10px] font-bold leading-none",
-                                  isTodayDate
-                                    ? "today-text-light"
-                                    : isWeekend
-                                      ? "text-foreground/80"
-                                      : "text-foreground",
+                                  "text-sm font-bold",
+                                  today ? "today-text-light" : "text-foreground",
+                                  isWeekend && !today && "text-foreground/90",
                                 )}
                               >
                                 {day.dayOfMonth}
                               </span>
                             </div>
+
+                            {/* Small heat indicator in top-left */}
+                            {contribution && contribution.commits > 0 && (
+                              <div
+                                className="absolute top-1 left-1 w-1.5 h-1.5 rounded-sm"
+                                style={{ backgroundColor: getContributionBg(contribution.level, isDark) }}
+                              />
+                            )}
                           </div>
                         </GitHubDayTooltip>
                       )
                     })}
                   </div>
 
-                  {/* Session swimlanes - new border-only style */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {rowSessions.map((pos, i) => {
-                      const colWidth = 100 / COLS
-                      const left = pos.startCol * colWidth
-                      const width = (pos.endCol - pos.startCol + 1) * colWidth
-                      const top = 24 + pos.slotIndex * 16
+                  {/* Swimlanes overlay */}
+                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}>
+                    {rowSessions.map((pos, idx) => {
+                      const { session, startCol, endCol, isStart, isEnd, slotIndex } = pos
+                      const colors = getRepoColor(session.repo)
 
-                      const repoColor = getRepoColor(pos.session.repo)
+                      const leftPercent = (startCol / COLS) * 100
+                      const widthPercent = ((endCol - startCol + 1) / COLS) * 100
+
+                      const slotHeight = 14
+                      const slotGap = 2
+                      const baseTop = 24
+                      const top = baseTop + slotIndex * (slotHeight + slotGap)
 
                       return (
-                        <TooltipPrimitive.Root key={`${pos.session.repo}-${pos.row}-${i}`}>
-                          <TooltipPrimitive.Trigger asChild>
-                            <div
-                              className={cn(
-                                "absolute h-[14px] pointer-events-auto cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 flex items-center",
-                                pos.isStart && "rounded-l",
-                                pos.isEnd && "rounded-r",
-                              )}
+                        <div
+                          key={`${session.repo}-${session.startDate}-${idx}`}
+                          className={cn(
+                            "absolute pointer-events-auto cursor-pointer transition-all hover:opacity-90",
+                            isStart && "rounded-l",
+                            isEnd && "rounded-r",
+                          )}
+                          style={{
+                            left: `${leftPercent}%`,
+                            width: `${widthPercent}%`,
+                            top: `${top}px`,
+                            height: `${slotHeight}px`,
+                            borderLeft: `3px solid ${colors.borderColor}`,
+                            backgroundColor: colors.lightFill,
+                          }}
+                          onClick={() => handleSessionClick(session)}
+                        >
+                          {isStart && (
+                            <span
+                              className="text-[10px] font-medium truncate px-1.5 leading-[14px] block"
                               style={{
-                                left: `${left}%`,
-                                width: `${width}%`,
-                                top: `${top}px`,
-                                borderLeft: pos.isStart ? `3px solid ${repoColor.borderColor}` : "none",
-                                backgroundColor: repoColor.lightFill,
+                                color: isDark ? colors.textLight : colors.textDark,
                               }}
-                              onClick={() => handleSessionClick(pos.session)}
                             >
-                              {pos.isStart && (
-                                <span
-                                  className="relative z-10 text-[9px] font-medium leading-[14px] truncate max-w-[90%] pl-1"
-                                  style={{
-                                    color: isDark ? "rgba(255,255,255,0.9)" : repoColor.textDark,
-                                  }}
-                                >
-                                  {pos.session.repo}
-                                </span>
-                              )}
-                            </div>
-                          </TooltipPrimitive.Trigger>
-                          <TooltipPrimitive.Portal>
-                            <TooltipPrimitive.Content
-                              side="top"
-                              sideOffset={6}
-                              className="z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-xl px-3 py-2 animate-in fade-in-0 zoom-in-95 duration-150"
-                            >
-                              <TooltipPrimitive.Arrow className="fill-white dark:fill-zinc-900" width={10} height={5} />
-                              <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
-                                {pos.session.repo}
-                              </p>
-                              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                {pos.session.totalCommits} commits · Click for details
-                              </p>
-                            </TooltipPrimitive.Content>
-                          </TooltipPrimitive.Portal>
-                        </TooltipPrimitive.Root>
+                              {session.repo}
+                            </span>
+                          )}
+                        </div>
                       )
                     })}
                   </div>
@@ -651,9 +730,19 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
           </div>
         </div>
 
-        {/* Session detail sheet */}
         <SessionDetailSheet session={selectedSession} open={sheetOpen} onClose={() => setSheetOpen(false)} />
       </div>
     </TooltipPrimitive.Provider>
   )
+}
+
+export function getGitHubRepos(year: number) {
+  const githubData = generateGitHubYearData(year)
+  const repoSessions = generateRepoSessions(githubData.contributions)
+  const repoSet = new Set<string>()
+  repoSessions.forEach((session) => repoSet.add(session.repo))
+  return Array.from(repoSet).map((name) => ({
+    name,
+    color: getRepoColor(name).borderColor,
+  }))
 }

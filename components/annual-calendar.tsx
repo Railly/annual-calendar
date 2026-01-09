@@ -10,10 +10,11 @@ import { EventModal } from "@/components/event-modal"
 import { NoteModal } from "@/components/note-modal"
 import { PhotoModal } from "@/components/photo-modal"
 import { TagFilter } from "@/components/tag-filter"
+import { RepoFilter } from "@/components/repo-filter"
 import { AIDock } from "@/components/ai-dock"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { YearView } from "@/components/year-view"
-import { GitHubYearView } from "@/components/github-year-view"
+import { GitHubYearView, StatsDialog, getGitHubRepos } from "@/components/github-year-view"
 import { cn } from "@/lib/utils"
 
 type ViewMode = "calendar" | "github"
@@ -34,6 +35,15 @@ export function AnnualCalendar() {
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
   const [viewMode, setViewMode] = useState<ViewMode>("calendar")
   const [pulsingToday, setPulsingToday] = useState(false)
+
+  const githubRepos = useMemo(() => getGitHubRepos(year), [year])
+  const [selectedRepos, setSelectedRepos] = useState<string[]>(() => githubRepos.map((r) => r.name))
+
+  // Update selected repos when year changes
+  useEffect(() => {
+    const repoNames = githubRepos.map((r) => r.name)
+    setSelectedRepos(repoNames)
+  }, [githubRepos])
 
   const { events, tags, isLoading, createEvent, updateEvent, deleteEvent } = useSanityCalendar()
 
@@ -162,13 +172,11 @@ export function AnnualCalendar() {
     }
   }
 
-  // Only update local state during drag
   const handleUpdateEventLocal = useCallback((event: CalendarEvent) => {
     pendingUpdateRef.current = event
     setLocalEvents((prev) => prev.map((e) => (e.id === event.id ? event : e)))
   }, [])
 
-  // Commit to Sanity on drag end
   const commitPendingUpdate = useCallback(async () => {
     if (pendingUpdateRef.current) {
       const eventToCommit = pendingUpdateRef.current
@@ -236,7 +244,7 @@ export function AnnualCalendar() {
   return (
     <TooltipProvider delayDuration={1200}>
       <div className="h-screen flex flex-col bg-background relative">
-        {/* Header */}
+        {/* Header - Single unified header */}
         <header className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center justify-between px-4 h-12">
             <div className="flex items-center gap-2">
@@ -247,10 +255,9 @@ export function AnnualCalendar() {
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextYear}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center bg-muted rounded-lg p-0.5">
+              {/* Tabs next to year selector */}
+              <div className="flex items-center bg-muted rounded-lg p-0.5 ml-2">
                 <button
                   onClick={() => setViewMode("calendar")}
                   className={cn(
@@ -276,18 +283,24 @@ export function AnnualCalendar() {
                   GitHub
                 </button>
               </div>
+            </div>
 
-              {viewMode === "calendar" && (
+            <div className="flex items-center gap-2">
+              {viewMode === "calendar" ? (
                 <TagFilter tags={tags} selectedTags={selectedTags} onTagsChange={setSelectedTags} />
+              ) : (
+                <RepoFilter repos={githubRepos} selectedRepos={selectedRepos} onReposChange={setSelectedRepos} />
               )}
 
               <ThemeToggle />
 
-              {viewMode === "calendar" && (
+              {viewMode === "calendar" ? (
                 <Button size="sm" className="h-8 gap-1.5" onClick={() => handleDayClick(new Date())}>
                   <Plus className="h-3.5 w-3.5" />
                   Event
                 </Button>
+              ) : (
+                <StatsDialog year={year} />
               )}
             </div>
           </div>
@@ -321,11 +334,11 @@ export function AnnualCalendar() {
               />
             )
           ) : (
-            <GitHubYearView year={year} />
+            <GitHubYearView year={year} selectedRepos={selectedRepos} onReposChange={setSelectedRepos} />
           )}
         </div>
 
-        {/* AI Dock */}
+        {/* AI Dock - only for calendar view */}
         {viewMode === "calendar" && (
           <AIDock
             tags={tags}

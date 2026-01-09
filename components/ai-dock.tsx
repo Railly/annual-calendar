@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "motion/react"
+import { Trash2, Download, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { EventTag } from "@/lib/calendar-data"
 
@@ -17,9 +18,11 @@ interface ParsedEvent {
 interface AIDockProps {
   tags: EventTag[]
   onAddEvents: (events: { title: string; description?: string; startDate: Date; endDate: Date; tag: string }[]) => void
+  onClearAll?: () => void
+  onLoadSampleData?: () => void
 }
 
-export function AIDock({ tags, onAddEvents }: AIDockProps) {
+export function AIDock({ tags, onAddEvents, onClearAll, onLoadSampleData }: AIDockProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -96,24 +99,25 @@ export function AIDock({ tags, onAddEvents }: AIDockProps) {
     }
   }
 
+  const collapsedWidth = 320
+  const expandedWidth = 500
+
   return (
     <div ref={containerRef} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
       <motion.div
-        layout
-        initial={false}
-        animate={{
-          width: isExpanded ? 500 : 320,
-          borderRadius: isExpanded ? 16 : 9999,
-        }}
-        transition={{
-          type: "spring",
-          stiffness: 500,
-          damping: 35,
-        }}
         className={cn(
           "bg-background border border-border shadow-lg overflow-hidden relative",
           isLoading && "shimmer-loading",
         )}
+        initial={false}
+        animate={{
+          width: isExpanded ? expandedWidth : collapsedWidth,
+          borderRadius: isExpanded ? 16 : 24,
+        }}
+        transition={{
+          width: { type: "spring", stiffness: 400, damping: 30 },
+          borderRadius: { duration: 0.2 },
+        }}
       >
         <motion.div layout="position" className="relative">
           {isExpanded ? (
@@ -122,10 +126,10 @@ export function AIDock({ tags, onAddEvents }: AIDockProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Add events with natural language..."
+              placeholder="Add events with natural language... e.g. 'Add vacation from March 15-20'"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
+              transition={{ delay: 0.05 }}
               className={cn(
                 "w-full bg-transparent px-4 py-3 text-sm resize-none focus:outline-none",
                 "placeholder:text-muted-foreground/60",
@@ -137,10 +141,11 @@ export function AIDock({ tags, onAddEvents }: AIDockProps) {
           ) : (
             <motion.button
               onClick={() => setIsExpanded(true)}
-              className="w-full text-left px-4 py-3 text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+              className="w-full text-left px-4 py-3 text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors flex items-center gap-2"
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
             >
+              <Sparkles className="h-4 w-4" />
               Add events with AI...
             </motion.button>
           )}
@@ -156,7 +161,31 @@ export function AIDock({ tags, onAddEvents }: AIDockProps) {
               className="overflow-hidden"
             >
               <div className="px-4 pb-3 flex items-center justify-between border-t border-border/50 pt-2">
-                <span className="text-[10px] text-muted-foreground">Enter to add · Esc to cancel</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">Enter to add · Esc to cancel</span>
+
+                  <div className="flex items-center gap-1 ml-2">
+                    {onClearAll && (
+                      <button
+                        onClick={onClearAll}
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Clear all events"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {onLoadSampleData && (
+                      <button
+                        onClick={onLoadSampleData}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Load sample events"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <button
                   onClick={handleSubmit}
                   disabled={isLoading || !input.trim()}

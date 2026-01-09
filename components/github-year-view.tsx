@@ -20,20 +20,21 @@ const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
 const COLS = 21
 const ROWS = 18
+const MAX_SWIMLANES_PER_ROW = 2
 
-const REPO_COLORS: Record<string, { bg: string; textLight: string; textDark: string }> = {
-  "annual-calendar-2026": { bg: "#3b82f6", textLight: "#1e3a5f", textDark: "#1e3a5f" }, // blue - dark blue text
-  "sanity-cms-integration": { bg: "#f97316", textLight: "#7c2d12", textDark: "#7c2d12" }, // orange - dark orange text
-  "ai-event-parser": { bg: "#a855f7", textLight: "#4c1d95", textDark: "#4c1d95" }, // purple - dark purple text
-  "nextjs-starter": { bg: "#10b981", textLight: "#064e3b", textDark: "#064e3b" }, // emerald - dark green text
-  "design-system": { bg: "#ec4899", textLight: "#831843", textDark: "#831843" }, // pink - dark pink text
-  "api-gateway": { bg: "#14b8a6", textLight: "#134e4a", textDark: "#134e4a" }, // teal - dark teal text
-  "mobile-app": { bg: "#ef4444", textLight: "#7f1d1d", textDark: "#7f1d1d" }, // red - dark red text
-  "docs-site": { bg: "#f59e0b", textLight: "#78350f", textDark: "#78350f" }, // amber/yellow - dark amber text
+const REPO_COLORS: Record<string, { borderColor: string; lightFill: string; textDark: string }> = {
+  "annual-calendar-2026": { borderColor: "#3b82f6", lightFill: "rgba(59,130,246,0.15)", textDark: "#1e40af" },
+  "sanity-cms-integration": { borderColor: "#f97316", lightFill: "rgba(249,115,22,0.15)", textDark: "#c2410c" },
+  "ai-event-parser": { borderColor: "#a855f7", lightFill: "rgba(168,85,247,0.15)", textDark: "#7c3aed" },
+  "nextjs-starter": { borderColor: "#10b981", lightFill: "rgba(16,185,129,0.15)", textDark: "#047857" },
+  "design-system": { borderColor: "#ec4899", lightFill: "rgba(236,72,153,0.15)", textDark: "#be185d" },
+  "api-gateway": { borderColor: "#14b8a6", lightFill: "rgba(20,184,166,0.15)", textDark: "#0f766e" },
+  "mobile-app": { borderColor: "#ef4444", lightFill: "rgba(239,68,68,0.15)", textDark: "#dc2626" },
+  "docs-site": { borderColor: "#f59e0b", lightFill: "rgba(245,158,11,0.15)", textDark: "#b45309" },
 }
 
 function getRepoColor(repo: string) {
-  return REPO_COLORS[repo] || { bg: "#6b7280", textLight: "#1f2937", textDark: "#1f2937" }
+  return REPO_COLORS[repo] || { borderColor: "#6b7280", lightFill: "rgba(107,114,128,0.15)", textDark: "#4b5563" }
 }
 
 function isPastDay(date: Date) {
@@ -255,54 +256,6 @@ function SessionDetailSheet({
   )
 }
 
-function getSessionGradient(
-  session: RepoWorkSession,
-  startCol: number,
-  endCol: number,
-  row: ({
-    date: Date
-    dayOfMonth: number
-    month: number
-    dayOfWeek: number
-    dayIndex: number
-    contribution: DayContribution | null
-  } | null)[],
-) {
-  const repoColor = getRepoColor(session.repo)
-  const bgColor = repoColor.bg
-
-  // Parse hex to rgb
-  const r = Number.parseInt(bgColor.slice(1, 3), 16)
-  const g = Number.parseInt(bgColor.slice(3, 5), 16)
-  const b = Number.parseInt(bgColor.slice(5, 7), 16)
-
-  const stops: string[] = []
-  let maxCommits = 1
-  session.dailyCommits.forEach((c) => {
-    if (c > maxCommits) maxCommits = c
-  })
-
-  const totalCols = endCol - startCol + 1
-
-  for (let i = 0; i <= totalCols; i++) {
-    const col = startCol + i
-    const day = row[col]
-    if (!day) continue
-
-    const dateStr = day.date.toISOString().split("T")[0]
-    const commits = session.dailyCommits.get(dateStr) || 0
-    const intensity = commits / maxCommits
-    // Low commits = low opacity (transparent/fading), high commits = high opacity (solid)
-    const opacity = 0.25 + intensity * 0.75
-    const percent = (i / totalCols) * 100
-
-    // Use the actual bar color with varying opacity
-    stops.push(`rgba(${r},${g},${b},${opacity}) ${percent}%`)
-  }
-
-  return stops.length > 1 ? `linear-gradient(to right, ${stops.join(", ")})` : "none"
-}
-
 interface GitHubYearViewProps {
   year: number
 }
@@ -409,24 +362,27 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
             }
             if (!conflict) break
             slotIndex++
+            if (slotIndex >= MAX_SWIMLANES_PER_ROW) break
           }
 
-          for (let c = startCol; c <= endCol; c++) {
-            slots[slotIndex].add(c)
+          if (slotIndex < MAX_SWIMLANES_PER_ROW) {
+            for (let c = startCol; c <= endCol; c++) {
+              slots[slotIndex].add(c)
+            }
+
+            const firstDayInRow = row[startCol]?.date
+            const lastDayInRow = row[endCol]?.date
+
+            positions.push({
+              session,
+              row: rowIndex,
+              startCol,
+              endCol,
+              isStart: firstDayInRow ? firstDayInRow.toISOString().split("T")[0] === session.startDate : false,
+              isEnd: lastDayInRow ? lastDayInRow.toISOString().split("T")[0] === session.endDate : false,
+              slotIndex,
+            })
           }
-
-          const firstDayInRow = row[startCol]?.date
-          const lastDayInRow = row[endCol]?.date
-
-          positions.push({
-            session,
-            row: rowIndex,
-            startCol,
-            endCol,
-            isStart: firstDayInRow ? firstDayInRow.toISOString().split("T")[0] === session.startDate : false,
-            isEnd: lastDayInRow ? lastDayInRow.toISOString().split("T")[0] === session.endDate : false,
-            slotIndex,
-          })
         }
       })
     })
@@ -630,47 +586,39 @@ export function GitHubYearView({ year }: GitHubYearViewProps) {
                     })}
                   </div>
 
-                  {/* Session swimlanes */}
+                  {/* Session swimlanes - new border-only style */}
                   <div className="absolute inset-0 pointer-events-none">
                     {rowSessions.map((pos, i) => {
                       const colWidth = 100 / COLS
                       const left = pos.startCol * colWidth
                       const width = (pos.endCol - pos.startCol + 1) * colWidth
-                      const top = 24 + pos.slotIndex * 18
+                      const top = 24 + pos.slotIndex * 16
 
                       const repoColor = getRepoColor(pos.session.repo)
-                      const gradientMask = getSessionGradient(pos.session, pos.startCol, pos.endCol, row)
 
                       return (
                         <TooltipPrimitive.Root key={`${pos.session.repo}-${pos.row}-${i}`}>
                           <TooltipPrimitive.Trigger asChild>
                             <div
                               className={cn(
-                                "absolute h-[16px] pointer-events-auto cursor-pointer transition-all hover:brightness-110 flex items-center",
-                                pos.isStart && "rounded-l pl-1",
-                                pos.isEnd && "rounded-r pr-0.5",
+                                "absolute h-[14px] pointer-events-auto cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 flex items-center",
+                                pos.isStart && "rounded-l",
+                                pos.isEnd && "rounded-r",
                               )}
                               style={{
                                 left: `${left}%`,
                                 width: `${width}%`,
                                 top: `${top}px`,
-                                backgroundColor: repoColor.bg,
+                                borderLeft: pos.isStart ? `3px solid ${repoColor.borderColor}` : "none",
+                                backgroundColor: repoColor.lightFill,
                               }}
                               onClick={() => handleSessionClick(pos.session)}
                             >
-                              <div
-                                className="absolute inset-0"
-                                style={{
-                                  background: gradientMask,
-                                  borderRadius: "inherit",
-                                }}
-                              />
-
                               {pos.isStart && (
                                 <span
-                                  className="relative z-10 text-[9px] font-medium leading-[16px] truncate max-w-[90%]"
+                                  className="relative z-10 text-[9px] font-medium leading-[14px] truncate max-w-[90%] pl-1"
                                   style={{
-                                    color: isDark ? repoColor.textDark : repoColor.textLight,
+                                    color: isDark ? "rgba(255,255,255,0.9)" : repoColor.textDark,
                                   }}
                                 >
                                   {pos.session.repo}

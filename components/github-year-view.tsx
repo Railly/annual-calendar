@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState, useEffect } from "react"
 import {
   GitCommit,
   GitPullRequest,
@@ -448,16 +448,18 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
     }))
   }, [repoSessions])
 
-  // Update selected repos when allRepos changes
-  useMemo(() => {
+  useEffect(() => {
     const repoNames = allRepos.map((r) => r.name)
-    onReposChange((prev) => {
-      // Keep only repos that still exist, add new ones
-      const filtered = prev.filter((r) => repoNames.includes(r))
-      const newRepos = repoNames.filter((r) => !prev.includes(r))
-      return [...filtered, ...newRepos]
-    })
-  }, [allRepos])
+    // Only update if repos actually changed
+    const hasNewRepos = repoNames.some((r) => !selectedRepos.includes(r))
+    const hasRemovedRepos = selectedRepos.some((r) => !repoNames.includes(r))
+
+    if (hasNewRepos || hasRemovedRepos) {
+      const filtered = selectedRepos.filter((r) => repoNames.includes(r))
+      const newRepos = repoNames.filter((r) => !selectedRepos.includes(r))
+      onReposChange([...filtered, ...newRepos])
+    }
+  }, [allRepos, selectedRepos, onReposChange])
 
   // Filter sessions by selected repos
   const filteredSessions = useMemo(() => {

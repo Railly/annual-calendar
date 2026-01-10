@@ -63,6 +63,7 @@ interface YearViewProps {
   events: CalendarEvent[]
   tags: EventTag[]
   dayPhotos: Map<string, string>
+  dayNotes?: Map<string, string>
   onDayClick: (date: Date) => void
   onAddNote: (date: Date) => void
   onAddPhoto: (date: Date) => void
@@ -75,6 +76,7 @@ interface YearViewProps {
   onUpdateEvent: (event: CalendarEvent) => void
   onCommitUpdate: () => void
   pulsingToday?: boolean
+  onCreateEventFromDrag?: (startDate: Date, endDate: Date) => void
 }
 
 export function YearView({
@@ -82,6 +84,7 @@ export function YearView({
   events,
   tags,
   dayPhotos,
+  dayNotes,
   onDayClick,
   onAddNote,
   onAddPhoto,
@@ -94,6 +97,7 @@ export function YearView({
   onUpdateEvent,
   onCommitUpdate,
   pulsingToday,
+  onCreateEventFromDrag,
 }: YearViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -120,6 +124,18 @@ export function YearView({
   } | null>(null)
 
   const [, forceUpdate] = useState(0)
+
+  const [dragSelection, setDragSelection] = useState<{
+    startDate: Date
+    endDate: Date
+    isActive: boolean
+  } | null>(null)
+
+  const dragSelectionRef = useRef<{
+    startDate: Date
+    startCellIndex: number
+    isActive: boolean
+  } | null>(null)
 
   const gridData = useMemo(() => {
     const grid: ({ date: Date; dayOfMonth: number; month: number; dayOfWeek: number; dayIndex: number } | null)[][] = []
@@ -173,7 +189,6 @@ export function YearView({
         dragStateRef.current.hasDragged = true
       }
 
-      // Show ghost during move drag
       if (dragStateRef.current.type === "move" && dragStateRef.current.hasDragged) {
         const eventDuration =
           Math.ceil(
@@ -190,7 +205,6 @@ export function YearView({
         })
       }
 
-      // Calculate days delta
       const daysDelta = Math.round(deltaX / cellWidth)
       const rowsDelta = Math.round(deltaY / cellHeight)
       const totalDaysDelta = daysDelta + rowsDelta * COLS
@@ -213,7 +227,6 @@ export function YearView({
         if (newEndDate < newStartDate) newEndDate = newStartDate
       }
 
-      // Only update local preview, don't write to DB
       onUpdateEvent({
         ...originalEvent,
         startDate: newStartDate,
@@ -225,7 +238,6 @@ export function YearView({
       if (dragStateRef.current) {
         if (dragStateRef.current.hasDragged) {
           justFinishedDragRef.current = true
-          // Commit the pending update to Sanity
           onCommitUpdate()
           setTimeout(() => {
             justFinishedDragRef.current = false
@@ -234,6 +246,18 @@ export function YearView({
         dragStateRef.current = null
         setDragGhost(null)
         forceUpdate((n) => n + 1)
+      }
+
+      if (dragSelectionRef.current?.isActive && dragSelection) {
+        dragSelectionRef.current = null
+
+        if (dragSelection.startDate.getTime() !== dragSelection.endDate.getTime() || true) {
+          if (onCreateEventFromDrag) {
+            onCreateEventFromDrag(dragSelection.startDate, dragSelection.endDate)
+          }
+        }
+
+        setDragSelection(null)
       }
     }
 
@@ -244,7 +268,7 @@ export function YearView({
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [getCellDimensions, onUpdateEvent, onCommitUpdate])
+  }, [getCellDimensions, onUpdateEvent, onCommitUpdate, dragSelection, onCreateEventFromDrag])
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent, event: CalendarEvent, type: "move" | "resize-start" | "resize-end") => {
@@ -263,6 +287,31 @@ export function YearView({
     },
     [],
   )
+
+  const getDateFromCellIndex = useCallback(
+    (row: number, col: number): Date | null => {
+      const cellData = gridData[row]?.[col]
+      return cellData?.date || null
+    },
+    [gridData],
+  )
+
+  const handleCellMouseDown = useCallback((e: React.MouseEvent, date: Date, row: number, col: number) => {
+    if (e.button !== 0) return
+    if ((e.target as HTMLElement).closest("[data-event-bar]")) return
+
+    e.preventDefault()
+    dragSelectionRef.current = {
+      startDate: date,
+      startCellIndex: row * COLS + col,
+      isActive: true,
+    }
+    setDragSelection({
+      startDate: date,
+      endDate: date,
+      isActive: true,
+    })
+  }, [])
 
   const eventPositions = useMemo(() => {
     const positions: {
@@ -356,13 +405,39 @@ export function YearView({
     return byRow
   }, [eventPositions])
 
+  const isDateInSelection = useCallback(
+    (date: Date): boolean => {
+      if (!dragSelection?.isActive) return false
+      const checkDate = new Date(date)
+      checkDate.setHours(0, 0, 0, 0)
+      const start = new Date(dragSelection.startDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(dragSelection.endDate)
+      end.setHours(23, 59, 59, 999)
+      return checkDate >= start && checkDate <= end
+    },
+    [dragSelection],
+  )
+
   const isDragging = dragStateRef.current !== null
+  const isDragSelecting = dragSelectionRef.current?.isActive || false
 
   return (
     <div
       ref={scrollRef}
-      className={cn("h-full overflow-auto", isDragging && "select-none")}
-      style={isDragging ? { cursor: dragStateRef.current?.type === "move" ? "grabbing" : "ew-resize" } : undefined}
+      className={cn("h-full overflow-auto", (isDragging || isDragSelecting) && "select-none")}
+      style={
+        isDragging || isDragSelecting
+          ? {
+              cursor:
+                isDragging && dragStateRef.current?.type === "move"
+                  ? "grabbing"
+                  : isDragSelecting
+                    ? "crosshair"
+                    : "ew-resize",
+            }
+          : undefined
+      }
     >
       <div ref={gridRef} className="min-w-[1000px]">
         {gridData.map((row, rowIndex) => {
@@ -391,19 +466,23 @@ export function YearView({
                   const dateKey = getDateKey(day.date)
                   const photo = dayPhotos.get(dateKey)
                   const isPast = isPastDay(day.date)
+                  const isInSelection = isDateInSelection(day.date)
 
                   return (
                     <div
                       key={day.date.toISOString()}
                       data-cell
-                      onClick={() => !isDragging && onDayClick(day.date)}
+                      data-cell-date={dateKey}
+                      onMouseDown={(e) => handleCellMouseDown(e, day.date, rowIndex, colIndex)}
+                      onClick={() => !isDragging && !isDragSelecting && onDayClick(day.date)}
                       className={cn(
                         "aspect-square bg-background border-r border-border/20 cursor-pointer transition-colors hover:bg-muted/30 relative group",
                         isWeekend && "weekend-day",
-                        isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
+                        isMonthStart && "month-start-line",
                         isTodayDate && "today-highlight",
                         isTodayDate && pulsingToday && "animate-today-pulse",
                         isPast && !isTodayDate && "past-day-stripes",
+                        isInSelection && "drag-selection-cell",
                       )}
                       style={
                         photo
@@ -471,6 +550,59 @@ export function YearView({
                   )
                 })}
               </div>
+
+              {dragSelection?.isActive &&
+                (() => {
+                  const rowStartDate = row[0]?.date
+                  const rowEndDate = row[COLS - 1]?.date || row.filter(Boolean).pop()?.date
+
+                  if (!rowStartDate || !rowEndDate) return null
+
+                  const selStart = new Date(dragSelection.startDate)
+                  selStart.setHours(0, 0, 0, 0)
+                  const selEnd = new Date(dragSelection.endDate)
+                  selEnd.setHours(23, 59, 59, 999)
+
+                  const rowS = new Date(rowStartDate)
+                  rowS.setHours(0, 0, 0, 0)
+                  const rowE = new Date(rowEndDate)
+                  rowE.setHours(23, 59, 59, 999)
+
+                  if (selEnd < rowS || selStart > rowE) return null
+
+                  let startCol = 0
+                  let endCol = COLS - 1
+
+                  for (let c = 0; c < COLS; c++) {
+                    const cellDate = row[c]?.date
+                    if (cellDate) {
+                      const cd = new Date(cellDate)
+                      cd.setHours(0, 0, 0, 0)
+                      if (cd >= selStart && startCol === 0) {
+                        startCol = c
+                      }
+                      if (cd <= selEnd) {
+                        endCol = c
+                      }
+                    }
+                  }
+
+                  const leftPercent = (startCol / COLS) * 100
+                  const widthPercent = ((endCol - startCol + 1) / COLS) * 100
+
+                  return (
+                    <div
+                      className="absolute h-[16px] flex items-center text-[9px] font-medium truncate pointer-events-none preview-swimlane rounded"
+                      style={{
+                        left: `calc(${leftPercent}% + 1px)`,
+                        width: `calc(${widthPercent}% - 2px)`,
+                        top: "20px",
+                      }}
+                    >
+                      <span className="pl-1 text-teal-700 dark:text-teal-200">New Event</span>
+                    </div>
+                  )
+                })()}
 
               <div className="absolute left-0 right-0 pointer-events-none" style={{ top: "20px" }}>
                 {rowEvents.map((pos, idx) => {
@@ -545,7 +677,6 @@ export function YearView({
         })}
       </div>
 
-      {/* Drag ghost */}
       {dragGhost && (
         <div
           className="fixed pointer-events-none z-50"

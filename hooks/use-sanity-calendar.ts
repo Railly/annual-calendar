@@ -61,16 +61,13 @@ export function useSanityCalendar() {
 
   const photos = useMemo(() => {
     const map = new Map<string, string>()
-    console.log("[v0] Processing sanityPhotos:", sanityPhotos)
     if (sanityPhotos && Array.isArray(sanityPhotos)) {
       for (const photo of sanityPhotos) {
         if (photo.date && photo.imageUrl) {
-          console.log("[v0] Adding photo to map:", photo.date, photo.imageUrl)
           map.set(photo.date, photo.imageUrl)
         }
       }
     }
-    console.log("[v0] Final photos map size:", map.size)
     return map
   }, [sanityPhotos])
 
@@ -159,7 +156,6 @@ export function useSanityCalendar() {
   }, [])
 
   const savePhoto = useCallback(async (date: string, imageUrl: string, caption?: string) => {
-    console.log("[v0] savePhoto called with:", { date, imageUrl, caption })
     try {
       const response = await fetch("/api/photos", {
         method: "POST",
@@ -167,21 +163,30 @@ export function useSanityCalendar() {
         body: JSON.stringify({ date, imageUrl, caption }),
       })
 
-      console.log("[v0] savePhoto response status:", response.status)
-
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("[v0] savePhoto error response:", errorText)
         throw new Error("Failed to save photo")
       }
 
       const result = await response.json()
-      console.log("[v0] savePhoto result:", result)
-
       mutate("/api/photos")
       return result
     } catch (error) {
-      console.error("[v0] Error saving photo:", error)
+      console.error("Error saving photo:", error)
+      throw error
+    }
+  }, [])
+
+  const deletePhoto = useCallback(async (date: string) => {
+    try {
+      const response = await fetch(`/api/photos?date=${encodeURIComponent(date)}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Failed to delete photo")
+
+      mutate("/api/photos")
+    } catch (error) {
+      console.error("Error deleting photo:", error)
       throw error
     }
   }, [])
@@ -198,5 +203,6 @@ export function useSanityCalendar() {
     deleteEvent,
     saveNote,
     savePhoto,
+    deletePhoto,
   }
 }

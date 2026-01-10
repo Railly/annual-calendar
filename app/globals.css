@@ -210,6 +210,35 @@
   cursor: ew-resize;
 }
 
+/* Month start line styling - dark in light mode, light in dark mode */
+.month-start-line {
+  border-left: 3px solid rgb(63, 63, 70) !important; /* zinc-700 in light mode */
+}
+
+.dark .month-start-line {
+  border-left: 3px solid rgb(228, 228, 231) !important; /* zinc-200 in dark mode */
+}
+
+/* Drag selection highlight for creating new events */
+.drag-selection-cell {
+  background-color: rgba(20, 184, 166, 0.25) !important; /* teal-500 with transparency */
+}
+
+.dark .drag-selection-cell {
+  background-color: rgba(20, 184, 166, 0.35) !important;
+}
+
+/* Preview swimlane for drag-to-create */
+.preview-swimlane {
+  background-color: rgba(20, 184, 166, 0.6);
+  border: 2px dashed rgb(20, 184, 166);
+}
+
+.dark .preview-swimlane {
+  background-color: rgba(20, 184, 166, 0.5);
+  border: 2px dashed rgb(94, 234, 212);
+}
+
 @theme inline {
   --font-sans: "Geist", "Geist Fallback";
   --font-mono: "Geist Mono", "Geist Mono Fallback";

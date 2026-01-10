@@ -42,8 +42,19 @@ export function AnnualCalendar() {
     setSelectedRepos(repoNames)
   }, [githubRepos])
 
-  const { events, tags, notes, photos, isLoading, createEvent, updateEvent, deleteEvent, saveNote, savePhoto } =
-    useSanityCalendar()
+  const {
+    events,
+    tags,
+    notes,
+    photos,
+    isLoading,
+    createEvent,
+    updateEvent,
+    deleteEvent,
+    saveNote,
+    savePhoto,
+    deletePhoto,
+  } = useSanityCalendar()
 
   const [localEvents, setLocalEvents] = useState<CalendarEvent[]>([])
 
@@ -248,6 +259,29 @@ export function AnnualCalendar() {
     }
   }
 
+  const handleRemovePhoto = async () => {
+    if (selectedDate) {
+      const dateKey = getDateKey(selectedDate)
+      await deletePhoto(dateKey)
+    }
+  }
+
+  const handleCreateEventFromDrag = useCallback(
+    (startDate: Date, endDate: Date) => {
+      setSelectedDate(startDate)
+      setEditingEvent({
+        id: "",
+        title: "",
+        description: "",
+        startDate,
+        endDate,
+        tag: tags[0]?.id || "default",
+      } as CalendarEvent)
+      setIsEventModalOpen(true)
+    },
+    [tags],
+  )
+
   return (
     <TooltipProvider delayDuration={1200}>
       <div className="h-screen flex flex-col bg-background relative">
@@ -336,6 +370,7 @@ export function AnnualCalendar() {
                 onUpdateEvent={handleUpdateEventLocal}
                 onCommitUpdate={commitPendingUpdate}
                 pulsingToday={pulsingToday}
+                onCreateEventFromDrag={handleCreateEventFromDrag}
               />
             )
           ) : (
@@ -377,6 +412,7 @@ export function AnnualCalendar() {
           isOpen={isPhotoModalOpen}
           onClose={() => setIsPhotoModalOpen(false)}
           onSave={handleSavePhoto}
+          onRemove={handleRemovePhoto}
           date={selectedDate}
           existingPhoto={selectedDate ? photos.get(getDateKey(selectedDate)) : undefined}
         />

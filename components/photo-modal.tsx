@@ -22,6 +22,7 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isMobile = useMediaQuery("(max-width: 640px)")
@@ -109,10 +110,17 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
     }
   }
 
-  const handleRemove = () => {
-    if (onRemove) {
-      onRemove()
-      onClose()
+  const handleRemove = async () => {
+    if (onRemove && !isDeleting) {
+      setIsDeleting(true)
+      try {
+        await onRemove()
+        onClose()
+      } catch (error) {
+        console.error("Error removing photo:", error)
+      } finally {
+        setIsDeleting(false)
+      }
     }
   }
 
@@ -122,6 +130,8 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
   }
 
   if (!isOpen || !date) return null
+
+  const isProcessing = isSaving || isDeleting
 
   const content = (
     <>
@@ -154,7 +164,7 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
               <button
                 type="button"
                 onClick={handleClearPreview}
-                disabled={isSaving}
+                disabled={isProcessing}
                 className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-sm rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 transition-all duration-200"
               >
                 <X className="h-3.5 w-3.5" />
@@ -162,7 +172,7 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isSaving}
+                disabled={isProcessing}
                 className="absolute bottom-2 right-2 px-2.5 py-1 bg-white/90 backdrop-blur-sm rounded-full text-xs font-medium text-gray-700 opacity-0 group-hover:opacity-100 hover:bg-white transition-all duration-200 flex items-center gap-1"
               >
                 <Upload className="h-3 w-3" />
@@ -222,10 +232,17 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
                 variant="ghost"
                 size="sm"
                 onClick={handleRemove}
-                disabled={isSaving}
+                disabled={isProcessing}
                 className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
               >
-                Remove
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    Removing...
+                  </>
+                ) : (
+                  "Remove"
+                )}
               </Button>
             ) : (
               <div />
@@ -236,12 +253,12 @@ export function PhotoModal({ isOpen, onClose, date, existingPhoto, onSave, onRem
                 variant="ghost"
                 size="sm"
                 onClick={onClose}
-                disabled={isSaving}
+                disabled={isProcessing}
                 className="h-7 text-xs text-muted-foreground hover:text-foreground"
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={!preview || isSaving} className="h-7 text-xs">
+              <Button type="submit" size="sm" disabled={!preview || isProcessing} className="h-7 text-xs">
                 {isSaving ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin mr-1" />

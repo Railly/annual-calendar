@@ -1,5 +1,6 @@
 import { sanityReadClient } from "@/lib/sanity"
 import { NextResponse } from "next/server"
+import { del } from "@vercel/blob"
 
 const SANITY_PROJECT_ID = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "jtwugudr"
 const SANITY_DATASET = process.env.NEXT_PUBLIC_SANITY_DATASET || "production"
@@ -50,19 +51,25 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { date, imageUrl, caption } = body
 
-    console.log("[v0] POST /api/photos called with:", { date, imageUrl, caption })
-
     if (!date || !imageUrl) {
       return NextResponse.json({ error: "Date and imageUrl are required" }, { status: 400 })
     }
 
     // Check if photo already exists for this date
-    const existingPhoto = await sanityReadClient.fetch(`*[_type == "dayPhoto" && date == $date][0]{ _id }`, { date })
-
-    console.log("[v0] Existing photo for date:", existingPhoto)
+    const existingPhoto = await sanityReadClient.fetch(
+      `*[_type == "dayPhoto" && date == $date][0]{ _id, externalImageUrl }`,
+      { date },
+    )
 
     if (existingPhoto?._id) {
-      console.log("[v0] Updating existing photo:", existingPhoto._id)
+      if (existingPhoto.externalImageUrl && existingPhoto.externalImageUrl.includes("blob.vercel-storage.com")) {
+        try {
+          await del(existingPhoto.externalImageUrl)
+        } catch (e) {
+          // Ignore blob deletion errors
+        }
+      }
+
       await sanityMutate([
         {
           patch: {
@@ -75,7 +82,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ id: existingPhoto._id, date, imageUrl, caption })
     } else {
       const photoId = `dayPhoto-${date.replace(/-/g, "")}`
-      console.log("[v0] Creating new photo with ID:", photoId)
 
       const photoDoc = {
         _id: photoId,
@@ -85,15 +91,51 @@ export async function POST(request: Request) {
         caption: caption || "",
       }
 
-      console.log("[v0] Photo document:", photoDoc)
-
-      const result = await sanityMutate([{ create: photoDoc }])
-      console.log("[v0] Sanity mutation result:", result)
+      await sanityMutate([{ create: photoDoc }])
 
       return NextResponse.json({ id: photoId, date, imageUrl, caption })
     }
   } catch (error) {
-    console.error("[v0] Error saving photo:", error)
+    console.error("Error saving photo:", error)
     return NextResponse.json({ error: "Failed to save photo" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const date = searchParams.get("date")
+
+    if (!date) {
+      return NextResponse.json({ error: "Date is required" }, { status: 400 })
+    }
+
+    // Find the photo for this date
+    const existingPhoto = await sanityReadClient.fetch(
+      `*[_type == "dayPhoto" && date == $date][0]{ _id, externalImageUrl }`,
+      { date },
+    )
+
+    if (!existingPhoto?._id) {
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+    }
+
+    // Delete from Vercel Blob if it's a blob URL
+    if (existingPhoto.externalImageUrl && existingPhoto.externalImageUrl.includes("blob.vercel-storage.com")) {
+      try {
+        await del(existingPhoto.externalImageUrl)
+      } catch (e) {
+        console.error("Error deleting from Blob:", e)
+        // Continue to delete from Sanity even if Blob deletion fails
+      }
+    }
+
+    // Delete from Sanity
+    await sanityMutate([{ delete: { id: existingPhoto._id } }])
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error deleting photo:", error)
+    return NextResponse.json({ error: "Failed to delete photo" }, { status: 500 })
   }
 }

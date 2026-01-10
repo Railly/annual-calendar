@@ -61,17 +61,16 @@ export function useSanityCalendar() {
 
   const photos = useMemo(() => {
     const map = new Map<string, string>()
-    if (sanityPhotos) {
+    console.log("[v0] Processing sanityPhotos:", sanityPhotos)
+    if (sanityPhotos && Array.isArray(sanityPhotos)) {
       for (const photo of sanityPhotos) {
-        if (photo.date) {
-          // Use externalImageUrl or imageUrl
-          const url = photo.externalImageUrl || photo.imageUrl
-          if (url) {
-            map.set(photo.date, url)
-          }
+        if (photo.date && photo.imageUrl) {
+          console.log("[v0] Adding photo to map:", photo.date, photo.imageUrl)
+          map.set(photo.date, photo.imageUrl)
         }
       }
     }
+    console.log("[v0] Final photos map size:", map.size)
     return map
   }, [sanityPhotos])
 
@@ -160,6 +159,7 @@ export function useSanityCalendar() {
   }, [])
 
   const savePhoto = useCallback(async (date: string, imageUrl: string, caption?: string) => {
+    console.log("[v0] savePhoto called with:", { date, imageUrl, caption })
     try {
       const response = await fetch("/api/photos", {
         method: "POST",
@@ -167,12 +167,21 @@ export function useSanityCalendar() {
         body: JSON.stringify({ date, imageUrl, caption }),
       })
 
-      if (!response.ok) throw new Error("Failed to save photo")
+      console.log("[v0] savePhoto response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] savePhoto error response:", errorText)
+        throw new Error("Failed to save photo")
+      }
+
+      const result = await response.json()
+      console.log("[v0] savePhoto result:", result)
 
       mutate("/api/photos")
-      return await response.json()
+      return result
     } catch (error) {
-      console.error("Error saving photo:", error)
+      console.error("[v0] Error saving photo:", error)
       throw error
     }
   }, [])

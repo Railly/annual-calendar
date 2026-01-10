@@ -33,7 +33,7 @@ export async function GET() {
       *[_type == "dayPhoto"] {
         "id": _id,
         date,
-        "imageUrl": image.asset->url,
+        "imageUrl": coalesce(externalImageUrl, image.asset->url),
         caption
       }
     `)
@@ -50,6 +50,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { date, imageUrl, caption } = body
 
+    console.log("[v0] POST /api/photos called with:", { date, imageUrl, caption })
+
     if (!date || !imageUrl) {
       return NextResponse.json({ error: "Date and imageUrl are required" }, { status: 400 })
     }
@@ -57,18 +59,10 @@ export async function POST(request: Request) {
     // Check if photo already exists for this date
     const existingPhoto = await sanityReadClient.fetch(`*[_type == "dayPhoto" && date == $date][0]{ _id }`, { date })
 
-    // For external URLs (Blob), we store the URL directly
-    // Note: Sanity image type normally expects an asset reference,
-    // but we'll store external URL in a different field
-    const photoDoc = {
-      _type: "dayPhoto",
-      date,
-      // Store external URL - we'll need to update schema or use a workaround
-      externalImageUrl: imageUrl,
-      caption: caption || "",
-    }
+    console.log("[v0] Existing photo for date:", existingPhoto)
 
     if (existingPhoto?._id) {
+      console.log("[v0] Updating existing photo:", existingPhoto._id)
       await sanityMutate([
         {
           patch: {
@@ -80,20 +74,26 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ id: existingPhoto._id, date, imageUrl, caption })
     } else {
-      const photoId = `dayPhoto-${date}`
-      await sanityMutate([
-        {
-          create: {
-            _id: photoId,
-            ...photoDoc,
-          },
-        },
-      ])
+      const photoId = `dayPhoto-${date.replace(/-/g, "")}`
+      console.log("[v0] Creating new photo with ID:", photoId)
+
+      const photoDoc = {
+        _id: photoId,
+        _type: "dayPhoto",
+        date,
+        externalImageUrl: imageUrl,
+        caption: caption || "",
+      }
+
+      console.log("[v0] Photo document:", photoDoc)
+
+      const result = await sanityMutate([{ create: photoDoc }])
+      console.log("[v0] Sanity mutation result:", result)
 
       return NextResponse.json({ id: photoId, date, imageUrl, caption })
     }
   } catch (error) {
-    console.error("Error saving photo:", error)
+    console.error("[v0] Error saving photo:", error)
     return NextResponse.json({ error: "Failed to save photo" }, { status: 500 })
   }
 }

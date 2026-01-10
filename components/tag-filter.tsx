@@ -14,7 +14,7 @@ const TAG_COLORS: Record<string, { bg: string; border: string; text: string }> =
   pink: { bg: "bg-pink-500", border: "border-pink-500", text: "text-pink-600" },
   blue: { bg: "bg-blue-500", border: "border-blue-500", text: "text-blue-600" },
   yellow: { bg: "bg-amber-400", border: "border-amber-400", text: "text-amber-600" },
-  red: { bg: "bg-red-500", border: "border-red-500", text: "text-red-600" },
+  red: { bg: "bg-red-500", border: "border-red-500", text: "text-red-500" },
 }
 
 interface TagFilterProps {
@@ -47,14 +47,12 @@ export function TagFilter({ tags, selectedTags, onTagsChange }: TagFilterProps) 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
-          <Filter className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs px-2">
+          <Filter className="h-2.5 w-2.5" />
           <span className="hidden sm:inline">Filter</span>
-          {!allSelected && activeCount > 0 && (
-            <span className="ml-0.5 bg-teal-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
-              {activeCount}
-            </span>
-          )}
+          <span className="ml-0.5 bg-teal-600 text-white text-[9px] px-1 py-px rounded-full font-medium min-w-[14px] text-center">
+            {activeCount}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-2">

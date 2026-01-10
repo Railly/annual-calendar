@@ -35,14 +35,13 @@ export function RepoFilter({ repos, selectedRepos, onReposChange }: RepoFilterPr
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs">
-          <Filter className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs px-2">
+          <Filter className="h-2.5 w-2.5" />
           <span className="hidden sm:inline">Filter</span>
-          {!allSelected && activeCount > 0 && (
-            <span className="ml-0.5 bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
-              {activeCount}
-            </span>
-          )}
+          {/* Always show badge when filtering */}
+          <span className="ml-0.5 bg-emerald-600 text-white text-[9px] px-1 py-px rounded-full font-medium min-w-[14px] text-center">
+            {activeCount}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-2">

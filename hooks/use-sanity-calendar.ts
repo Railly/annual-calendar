@@ -25,6 +25,14 @@ export function useSanityCalendar() {
     revalidateOnFocus: false,
   })
 
+  const { data: sanityNotes } = useSWR<any[]>("/api/notes", fetcher, {
+    revalidateOnFocus: false,
+  })
+
+  const { data: sanityPhotos } = useSWR<any[]>("/api/photos", fetcher, {
+    revalidateOnFocus: false,
+  })
+
   const tags = tagsError ? defaultTags : sanityTags || defaultTags
 
   const events: CalendarEvent[] = useMemo(() => {
@@ -38,6 +46,34 @@ export function useSanityCalendar() {
       tag: event.tag,
     }))
   }, [sanityEvents])
+
+  const notes = useMemo(() => {
+    const map = new Map<string, string>()
+    if (sanityNotes) {
+      for (const note of sanityNotes) {
+        if (note.date && note.content) {
+          map.set(note.date, note.content)
+        }
+      }
+    }
+    return map
+  }, [sanityNotes])
+
+  const photos = useMemo(() => {
+    const map = new Map<string, string>()
+    if (sanityPhotos) {
+      for (const photo of sanityPhotos) {
+        if (photo.date) {
+          // Use externalImageUrl or imageUrl
+          const url = photo.externalImageUrl || photo.imageUrl
+          if (url) {
+            map.set(photo.date, url)
+          }
+        }
+      }
+    }
+    return map
+  }, [sanityPhotos])
 
   // Create event
   const createEvent = useCallback(async (event: Omit<CalendarEvent, "id">) => {
@@ -105,7 +141,6 @@ export function useSanityCalendar() {
     }
   }, [])
 
-  // Save note
   const saveNote = useCallback(async (date: string, content: string) => {
     try {
       const response = await fetch("/api/notes", {
@@ -116,6 +151,7 @@ export function useSanityCalendar() {
 
       if (!response.ok) throw new Error("Failed to save note")
 
+      mutate("/api/notes")
       return await response.json()
     } catch (error) {
       console.error("Error saving note:", error)
@@ -123,14 +159,35 @@ export function useSanityCalendar() {
     }
   }, [])
 
+  const savePhoto = useCallback(async (date: string, imageUrl: string, caption?: string) => {
+    try {
+      const response = await fetch("/api/photos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, imageUrl, caption }),
+      })
+
+      if (!response.ok) throw new Error("Failed to save photo")
+
+      mutate("/api/photos")
+      return await response.json()
+    } catch (error) {
+      console.error("Error saving photo:", error)
+      throw error
+    }
+  }, [])
+
   return {
     events,
     tags,
+    notes,
+    photos,
     isLoading,
     isOnline,
     createEvent,
     updateEvent,
     deleteEvent,
     saveNote,
+    savePhoto,
   }
 }

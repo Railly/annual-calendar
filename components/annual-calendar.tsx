@@ -30,8 +30,6 @@ export function AnnualCalendar() {
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false)
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
-  const [dayPhotos, setDayPhotos] = useState<Map<string, string>>(new Map())
-  const [dayNotes, setDayNotes] = useState<Map<string, string>>(new Map())
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
   const [viewMode, setViewMode] = useState<ViewMode>("calendar")
   const [pulsingToday, setPulsingToday] = useState(false)
@@ -39,13 +37,13 @@ export function AnnualCalendar() {
   const githubRepos = useMemo(() => getGitHubRepos(year), [year])
   const [selectedRepos, setSelectedRepos] = useState<string[]>(() => githubRepos.map((r) => r.name))
 
-  // Update selected repos when year changes
   useEffect(() => {
     const repoNames = githubRepos.map((r) => r.name)
     setSelectedRepos(repoNames)
   }, [githubRepos])
 
-  const { events, tags, isLoading, createEvent, updateEvent, deleteEvent } = useSanityCalendar()
+  const { events, tags, notes, photos, isLoading, createEvent, updateEvent, deleteEvent, saveNote, savePhoto } =
+    useSanityCalendar()
 
   const [localEvents, setLocalEvents] = useState<CalendarEvent[]>([])
 
@@ -88,8 +86,8 @@ export function AnnualCalendar() {
 
   const handleSaveEvent = async (eventData: Omit<CalendarEvent, "id"> & { id?: string }) => {
     try {
-      if (editingEvent) {
-        const updatedEvent = { ...editingEvent, ...eventData }
+      if (editingEvent && eventData.id) {
+        const updatedEvent = { ...eventData, id: eventData.id } as CalendarEvent
         await updateEvent(updatedEvent)
         setLocalEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? updatedEvent : e)))
       } else {
@@ -101,8 +99,11 @@ export function AnnualCalendar() {
         setLocalEvents((prev) => [...prev, fullEvent])
       }
     } catch (error) {
-      if (editingEvent) {
-        setLocalEvents((prev) => prev.map((e) => (e.id === editingEvent.id ? { ...editingEvent, ...eventData } : e)))
+      console.error("Error saving event:", error)
+      if (editingEvent && eventData.id) {
+        setLocalEvents((prev) =>
+          prev.map((e) => (e.id === editingEvent.id ? ({ ...eventData, id: eventData.id } as CalendarEvent) : e)),
+        )
       } else {
         const newEvent: CalendarEvent = {
           id: Date.now().toString(),
@@ -118,9 +119,7 @@ export function AnnualCalendar() {
   const handleDeleteEvent = async (eventId: string) => {
     try {
       await deleteEvent(eventId)
-    } catch (error) {
-      // Continue with local delete
-    }
+    } catch (error) {}
     setLocalEvents((prev) => prev.filter((e) => e.id !== eventId))
     setIsEventModalOpen(false)
     setEditingEvent(null)
@@ -189,20 +188,28 @@ export function AnnualCalendar() {
     }
   }, [updateEvent])
 
-  const handleSaveNote = (content: string) => {
+  const handleSavePhoto = async (photoUrl: string) => {
     if (selectedDate) {
       const dateKey = getDateKey(selectedDate)
-      setDayNotes((prev) => new Map(prev).set(dateKey, content))
-    }
-    setIsNoteModalOpen(false)
-  }
-
-  const handleSavePhoto = (photoUrl: string) => {
-    if (selectedDate) {
-      const dateKey = getDateKey(selectedDate)
-      setDayPhotos((prev) => new Map(prev).set(dateKey, photoUrl))
+      try {
+        await savePhoto(dateKey, photoUrl)
+      } catch (error) {
+        console.error("Error saving photo:", error)
+      }
     }
     setIsPhotoModalOpen(false)
+  }
+
+  const handleSaveNote = async (content: string) => {
+    if (selectedDate) {
+      const dateKey = getDateKey(selectedDate)
+      try {
+        await saveNote(dateKey, content)
+      } catch (error) {
+        console.error("Error saving note:", error)
+      }
+    }
+    setIsNoteModalOpen(false)
   }
 
   const handleAddEventsFromAI = async (newEvents: Omit<CalendarEvent, "id">[]) => {
@@ -244,48 +251,46 @@ export function AnnualCalendar() {
   return (
     <TooltipProvider delayDuration={1200}>
       <div className="h-screen flex flex-col bg-background relative">
-        {/* Header - Single unified header */}
         <header className="flex-shrink-0 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center justify-between px-4 h-12">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevYear}>
-                <ChevronLeft className="h-4 w-4" />
+          <div className="flex items-center justify-between px-3 h-8">
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handlePrevYear}>
+                <ChevronLeft className="h-2.5 w-2.5" />
               </Button>
-              <span className="text-lg font-semibold min-w-[60px] text-center">{year}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextYear}>
-                <ChevronRight className="h-4 w-4" />
+              <span className="text-xs font-semibold min-w-[40px] text-center">{year}</span>
+              <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleNextYear}>
+                <ChevronRight className="h-2.5 w-2.5" />
               </Button>
 
-              {/* Tabs next to year selector */}
-              <div className="flex items-center bg-muted rounded-lg p-0.5 ml-2">
+              <div className="flex items-center bg-muted rounded p-0.5 ml-1.5">
                 <button
                   onClick={() => setViewMode("calendar")}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all",
                     viewMode === "calendar"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Calendar className="h-3.5 w-3.5" />
+                  <Calendar className="h-2.5 w-2.5" />
                   Calendar
                 </button>
                 <button
                   onClick={() => setViewMode("github")}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                    "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all",
                     viewMode === "github"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Github className="h-3.5 w-3.5" />
+                  <Github className="h-2.5 w-2.5" />
                   GitHub
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {viewMode === "calendar" ? (
                 <TagFilter tags={tags} selectedTags={selectedTags} onTagsChange={setSelectedTags} />
               ) : (
@@ -295,8 +300,8 @@ export function AnnualCalendar() {
               <ThemeToggle />
 
               {viewMode === "calendar" ? (
-                <Button size="sm" className="h-8 gap-1.5" onClick={() => handleDayClick(new Date())}>
-                  <Plus className="h-3.5 w-3.5" />
+                <Button size="sm" className="h-5 gap-1 text-[10px] px-1.5" onClick={() => handleDayClick(new Date())}>
+                  <Plus className="h-2.5 w-2.5" />
                   Event
                 </Button>
               ) : (
@@ -306,19 +311,19 @@ export function AnnualCalendar() {
           </div>
         </header>
 
-        {/* Main Content */}
         <div className="flex-1 min-h-0 relative">
           {viewMode === "calendar" ? (
             isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <div className="text-muted-foreground">Loading calendar...</div>
+                <div className="text-muted-foreground text-sm">Loading calendar...</div>
               </div>
             ) : (
               <YearView
                 year={year}
                 events={filteredEvents}
                 tags={tags}
-                dayPhotos={dayPhotos}
+                dayPhotos={photos}
+                dayNotes={notes}
                 onDayClick={handleDayClick}
                 onAddNote={handleAddNote}
                 onAddPhoto={handleAddPhoto}
@@ -338,7 +343,6 @@ export function AnnualCalendar() {
           )}
         </div>
 
-        {/* AI Dock - only for calendar view */}
         {viewMode === "calendar" && (
           <AIDock
             tags={tags}
@@ -348,7 +352,6 @@ export function AnnualCalendar() {
           />
         )}
 
-        {/* Modals */}
         <EventModal
           isOpen={isEventModalOpen}
           onClose={() => {
@@ -367,14 +370,15 @@ export function AnnualCalendar() {
           onClose={() => setIsNoteModalOpen(false)}
           onSave={handleSaveNote}
           date={selectedDate || new Date()}
-          existingNote={selectedDate ? dayNotes.get(getDateKey(selectedDate)) : undefined}
+          existingNote={selectedDate ? notes.get(getDateKey(selectedDate)) : undefined}
         />
 
         <PhotoModal
           isOpen={isPhotoModalOpen}
           onClose={() => setIsPhotoModalOpen(false)}
           onSave={handleSavePhoto}
-          date={selectedDate || new Date()}
+          date={selectedDate}
+          existingPhoto={selectedDate ? photos.get(getDateKey(selectedDate)) : undefined}
         />
       </div>
     </TooltipProvider>

@@ -77,6 +77,7 @@ interface YearViewProps {
   onCommitUpdate: () => void
   pulsingToday?: boolean
   onCreateEventFromDrag?: (startDate: Date, endDate: Date) => void
+  clearDragSelectionRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export function YearView({
@@ -98,6 +99,7 @@ export function YearView({
   onCommitUpdate,
   pulsingToday,
   onCreateEventFromDrag,
+  clearDragSelectionRef,
 }: YearViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -129,6 +131,7 @@ export function YearView({
     startDate: Date
     endDate: Date
     isActive: boolean
+    isPending: boolean
   } | null>(null)
 
   const dragSelectionRef = useRef<{
@@ -257,7 +260,7 @@ export function YearView({
           }
         }
 
-        setDragSelection(null)
+        setDragSelection((prev) => (prev ? { ...prev, isActive: false, isPending: true } : null))
       }
     }
 
@@ -269,6 +272,19 @@ export function YearView({
       document.removeEventListener("mouseup", handleMouseUp)
     }
   }, [getCellDimensions, onUpdateEvent, onCommitUpdate, dragSelection, onCreateEventFromDrag])
+
+  useEffect(() => {
+    if (clearDragSelectionRef) {
+      clearDragSelectionRef.current = () => {
+        setDragSelection(null)
+      }
+    }
+    return () => {
+      if (clearDragSelectionRef) {
+        clearDragSelectionRef.current = null
+      }
+    }
+  }, [clearDragSelectionRef])
 
   const handleDragStart = useCallback(
     (e: React.MouseEvent, event: CalendarEvent, type: "move" | "resize-start" | "resize-end") => {
@@ -310,6 +326,27 @@ export function YearView({
       startDate: date,
       endDate: date,
       isActive: true,
+      isPending: false,
+    })
+  }, [])
+
+  const handleCellMouseMove = useCallback((e: React.MouseEvent, date: Date) => {
+    if (!dragSelectionRef.current?.isActive) return
+
+    const startDate = dragSelectionRef.current.startDate
+    let newStart = startDate
+    let newEnd = date
+
+    if (date < startDate) {
+      newStart = date
+      newEnd = startDate
+    }
+
+    setDragSelection({
+      startDate: newStart,
+      endDate: newEnd,
+      isActive: true,
+      isPending: false,
     })
   }, [])
 
@@ -407,7 +444,7 @@ export function YearView({
 
   const isDateInSelection = useCallback(
     (date: Date): boolean => {
-      if (!dragSelection?.isActive) return false
+      if (!dragSelection?.isActive && !dragSelection?.isPending) return false
       const checkDate = new Date(date)
       checkDate.setHours(0, 0, 0, 0)
       const start = new Date(dragSelection.startDate)
@@ -474,6 +511,7 @@ export function YearView({
                       data-cell
                       data-cell-date={dateKey}
                       onMouseDown={(e) => handleCellMouseDown(e, day.date, rowIndex, colIndex)}
+                      onMouseMove={(e) => handleCellMouseMove(e, day.date)}
                       onClick={() => !isDragging && !isDragSelecting && onDayClick(day.date)}
                       className={cn(
                         "aspect-square bg-background border-r border-border/20 cursor-pointer transition-colors hover:bg-muted/30 relative group",
@@ -523,7 +561,7 @@ export function YearView({
                       </div>
 
                       {isMonthStart && (
-                        <span className="absolute top-0.5 left-0.5 bg-zinc-700 dark:bg-zinc-600 text-white text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none">
+                        <span className="absolute top-0 left-0 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[7px] font-bold px-1 py-px tracking-wide leading-none">
                           {MONTHS[day.month]}
                         </span>
                       )}
@@ -551,7 +589,7 @@ export function YearView({
                 })}
               </div>
 
-              {dragSelection?.isActive &&
+              {(dragSelection?.isActive || dragSelection?.isPending) &&
                 (() => {
                   const rowStartDate = row[0]?.date
                   const rowEndDate = row[COLS - 1]?.date || row.filter(Boolean).pop()?.date

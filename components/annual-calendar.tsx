@@ -37,6 +37,8 @@ export function AnnualCalendar() {
   const githubRepos = useMemo(() => getGitHubRepos(year), [year])
   const [selectedRepos, setSelectedRepos] = useState<string[]>(() => githubRepos.map((r) => r.name))
 
+  const clearDragSelectionRef = useRef<(() => void) | null>(null)
+
   useEffect(() => {
     const repoNames = githubRepos.map((r) => r.name)
     setSelectedRepos(repoNames)
@@ -125,6 +127,7 @@ export function AnnualCalendar() {
     }
     setIsEventModalOpen(false)
     setEditingEvent(null)
+    clearDragSelectionRef.current?.()
   }
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -371,6 +374,7 @@ export function AnnualCalendar() {
                 onCommitUpdate={commitPendingUpdate}
                 pulsingToday={pulsingToday}
                 onCreateEventFromDrag={handleCreateEventFromDrag}
+                clearDragSelectionRef={clearDragSelectionRef}
               />
             )
           ) : (
@@ -392,6 +396,7 @@ export function AnnualCalendar() {
           onClose={() => {
             setIsEventModalOpen(false)
             setEditingEvent(null)
+            clearDragSelectionRef.current?.()
           }}
           onSave={handleSaveEvent}
           onDelete={editingEvent ? () => handleDeleteEvent(editingEvent.id) : undefined}

@@ -1018,7 +1018,7 @@ export function GitHubYearView({
                               isWeekend && "weekend-day",
                               past && !today && "past-day-stripes",
                               today && "today-highlight",
-                              isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
+                              isMonthStart && "border-l-[3px] border-l-zinc-900 dark:border-l-white",
                               "hover:bg-muted/30",
                             )} 
                             onClick={() => handleDayClick(day.dayIndex)}

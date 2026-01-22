@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { YearView } from "@/components/year-view"
 import { GitHubYearView, StatsDialog, getGitHubRepos } from "@/components/github-year-view"
 import { IntegrationStatus } from "@/components/integration-status"
+import { GitHubOnboardingModal, CalendarOnboardingModal } from "@/components/onboarding-modals"
 import { AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +37,8 @@ export function AnnualCalendar() {
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
   const [viewMode, setViewMode] = useState<ViewMode>("github")
   const [pulsingToday, setPulsingToday] = useState(false)
+  const [showGitHubOnboarding, setShowGitHubOnboarding] = useState(true)
+  const [showCalendarOnboarding, setShowCalendarOnboarding] = useState(false)
 
   const {
     githubData,
@@ -86,6 +89,15 @@ export function AnnualCalendar() {
 
   const handlePrevYear = () => setYear((y) => y - 1)
   const handleNextYear = () => setYear((y) => y + 1)
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode)
+    if (mode === "github") {
+      setShowGitHubOnboarding(true)
+    } else {
+      setShowCalendarOnboarding(true)
+    }
+  }
 
   const handleDayClick = (date: Date) => {
     setSelectedDate(date)
@@ -314,7 +326,7 @@ export function AnnualCalendar() {
 
               <div className="flex items-center bg-muted rounded p-0.5 ml-1.5">
                 <button
-                  onClick={() => setViewMode("calendar")}
+                  onClick={() => handleViewModeChange("calendar")}
                   className={cn(
                     "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all",
                     viewMode === "calendar"
@@ -326,7 +338,7 @@ export function AnnualCalendar() {
                   Calendar
                 </button>
                 <button
-                  onClick={() => setViewMode("github")}
+                  onClick={() => handleViewModeChange("github")}
                   className={cn(
                     "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-all",
                     viewMode === "github"
@@ -376,10 +388,10 @@ export function AnnualCalendar() {
 
         <div className="flex-1 min-h-0 relative flex flex-col">
           {viewMode === "calendar" && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex-shrink-0">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-              <span className="text-xs text-amber-600 dark:text-amber-400">
-                Showing demo data. GitHub App is under review - Google Calendar connection coming soon.
+            <div className="flex items-center gap-2 px-4 py-2 bg-zinc-100 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-700 flex-shrink-0">
+              <AlertCircle className="h-4 w-4 text-zinc-500 dark:text-zinc-400 flex-shrink-0" />
+              <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                Google App under review. For now, only GitHub is working. Calendar events shown are public demo data.
               </span>
             </div>
           )}
@@ -465,6 +477,9 @@ export function AnnualCalendar() {
           date={selectedDate}
           existingPhoto={selectedDate ? photos.get(getDateKey(selectedDate)) : undefined}
         />
+
+        <GitHubOnboardingModal open={showGitHubOnboarding} onOpenChange={setShowGitHubOnboarding} />
+        <CalendarOnboardingModal open={showCalendarOnboarding} onOpenChange={setShowCalendarOnboarding} />
       </div>
     </TooltipProvider>
   )

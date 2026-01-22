@@ -16,6 +16,8 @@ import { AIDock } from "@/components/ai-dock"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { YearView } from "@/components/year-view"
 import { GitHubYearView, StatsDialog, getGitHubRepos } from "@/components/github-year-view"
+import { IntegrationStatus } from "@/components/integration-status"
+import { AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type ViewMode = "calendar" | "github"
@@ -32,7 +34,7 @@ export function AnnualCalendar() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
-  const [viewMode, setViewMode] = useState<ViewMode>("calendar")
+  const [viewMode, setViewMode] = useState<ViewMode>("github")
   const [pulsingToday, setPulsingToday] = useState(false)
 
   const {
@@ -347,6 +349,12 @@ export function AnnualCalendar() {
 
               <ThemeToggle />
 
+              <IntegrationStatus 
+                onGitHubSync={syncGitHub}
+                lastGitHubSync={lastSynced}
+                isGitHubSyncing={isSyncing}
+              />
+
               {viewMode === "calendar" ? (
                 <Button size="sm" className="h-5 gap-1 text-[10px] px-1.5" onClick={() => handleDayClick(new Date())}>
                   <Plus className="h-2.5 w-2.5" />
@@ -366,7 +374,15 @@ export function AnnualCalendar() {
           </div>
         </header>
 
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 relative flex flex-col">
+          {viewMode === "calendar" && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex-shrink-0">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                Showing demo data. GitHub App is under review - Google Calendar connection coming soon.
+              </span>
+            </div>
+          )}
           {viewMode === "calendar" ? (
             isLoading ? (
               <div className="flex items-center justify-center h-full">

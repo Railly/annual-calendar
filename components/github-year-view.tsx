@@ -1076,69 +1076,75 @@ export function GitHubYearView({
                     })}
                   </div>
 
-                  {/* Swimlanes overlay */}
-                  <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}>
-                    {rowSessions.map((pos, idx) => {
-                      const { session, startCol, endCol, isStart, isEnd, slotIndex } = pos
-                      const colors = getRepoColor(session.repo)
+                  {/* Swimlanes overlay - only show when using real data */}
+                  {!isUsingMockData && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}>
+                      {rowSessions.map((pos, idx) => {
+                        const { session, startCol, endCol, isStart, isEnd, slotIndex } = pos
+                        const colors = getRepoColor(session.repo)
 
-                      const leftPercent = (startCol / COLS) * 100
-                      const widthPercent = ((endCol - startCol + 1) / COLS) * 100
+                        const leftPercent = (startCol / COLS) * 100
+                        const widthPercent = ((endCol - startCol + 1) / COLS) * 100
 
-                      const slotHeight = 14
-                      const slotGap = 2
-                      const baseTop = 24
-                      const top = baseTop + slotIndex * (slotHeight + slotGap)
+                        const slotHeight = 14
+                        const slotGap = 2
+                        const baseTop = 24
+                        const top = baseTop + slotIndex * (slotHeight + slotGap)
 
-                      return (
-                        <div
-                          key={`${session.repo}-${session.startDate}-${idx}`}
-                          className={cn(
-                            "absolute pointer-events-auto cursor-pointer transition-all hover:opacity-90",
-                            isStart && "rounded-l",
-                            isEnd && "rounded-r",
-                          )}
-                          style={{
-                            left: `${leftPercent}%`,
-                            width: `${widthPercent}%`,
-                            top: `${top}px`,
-                            height: `${slotHeight}px`,
-                            borderLeft: `3px solid ${colors.borderColor}`,
-                            backgroundColor: colors.lightFill,
-                          }}
-                          onClick={() => handleSessionClick(session)}
-                        >
-                          {isStart && (
-                            <span
-                              className="text-[10px] font-medium truncate px-1.5 leading-[14px] block"
-                              style={{
-                                color: isDark ? colors.textLight : colors.textDark,
-                              }}
-                            >
-                              {session.repo}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
+                        return (
+                          <div
+                            key={`${session.repo}-${session.startDate}-${idx}`}
+                            className={cn(
+                              "absolute pointer-events-auto cursor-pointer transition-all hover:opacity-90",
+                              isStart && "rounded-l",
+                              isEnd && "rounded-r",
+                            )}
+                            style={{
+                              left: `${leftPercent}%`,
+                              width: `${widthPercent}%`,
+                              top: `${top}px`,
+                              height: `${slotHeight}px`,
+                              borderLeft: `3px solid ${colors.borderColor}`,
+                              backgroundColor: colors.lightFill,
+                            }}
+                            onClick={() => handleSessionClick(session)}
+                          >
+                            {isStart && (
+                              <span
+                                className="text-[10px] font-medium truncate px-1.5 leading-[14px] block"
+                                style={{
+                                  color: isDark ? colors.textLight : colors.textDark,
+                                }}
+                              >
+                                {session.repo}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
         </div>
 
-        <SessionDetailSheet session={selectedSession} open={sheetOpen} onClose={() => setSheetOpen(false)} />
-        <DayDetailSheet 
-          day={selectedDayData} 
-          contribution={selectedDayData ? selectedDayData.contribution : null} 
-          githubData={githubData} 
-          open={daySheetOpen} 
-          onClose={() => setDaySheetOpen(false)} 
-          onPrev={handlePrevDay} 
-          onNext={handleNextDay} 
-          year={year} 
-        />
+        {sheetOpen && (
+          <SessionDetailSheet session={selectedSession} open={sheetOpen} onClose={() => setSheetOpen(false)} />
+        )}
+        {daySheetOpen && (
+          <DayDetailSheet 
+            day={selectedDayData} 
+            contribution={selectedDayData ? selectedDayData.contribution : null} 
+            githubData={githubData} 
+            open={daySheetOpen} 
+            onClose={() => setDaySheetOpen(false)} 
+            onPrev={handlePrevDay} 
+            onNext={handleNextDay} 
+            year={year} 
+          />
+        )}
       </div>
     </TooltipPrimitive.Provider>
   )

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { type CalendarEvent, defaultTags } from "@/lib/calendar-data"
 import { useSanityCalendar } from "@/hooks/use-sanity-calendar"
+import { useGitHubData } from "@/hooks/use-github-data"
 import { EventModal } from "@/components/event-modal"
 import { NoteModal } from "@/components/note-modal"
 import { PhotoModal } from "@/components/photo-modal"
@@ -33,6 +34,16 @@ export function AnnualCalendar() {
   const [selectedTags, setSelectedTags] = useState<string[]>(defaultTags.map((t) => t.id))
   const [viewMode, setViewMode] = useState<ViewMode>("calendar")
   const [pulsingToday, setPulsingToday] = useState(false)
+
+  const {
+    githubData,
+    repoSessions,
+    isUsingMockData,
+    lastSynced,
+    syncGitHub,
+    isSyncing,
+    needsSync,
+  } = useGitHubData(year)
 
   const githubRepos = useMemo(() => getGitHubRepos(year), [year])
   const [selectedRepos, setSelectedRepos] = useState<string[]>(() => githubRepos.map((r) => r.name))
@@ -342,7 +353,14 @@ export function AnnualCalendar() {
                   Event
                 </Button>
               ) : (
-                <StatsDialog year={year} />
+                <StatsDialog 
+                    year={year}
+                    githubData={githubData}
+                    isUsingMockData={isUsingMockData}
+                    lastSynced={lastSynced}
+                    onSync={syncGitHub}
+                    isSyncing={isSyncing}
+                  />
               )}
             </div>
           </div>
@@ -378,7 +396,17 @@ export function AnnualCalendar() {
               />
             )
           ) : (
-            <GitHubYearView year={year} selectedRepos={selectedRepos} onReposChange={setSelectedRepos} />
+            <GitHubYearView 
+                  year={year} 
+                  selectedRepos={selectedRepos} 
+                  onReposChange={setSelectedRepos}
+                  githubData={githubData}
+                  repoSessions={repoSessions}
+                  isUsingMockData={isUsingMockData}
+                  lastSynced={lastSynced}
+                  onSync={syncGitHub}
+                  isSyncing={isSyncing}
+                />
           )}
         </div>
 

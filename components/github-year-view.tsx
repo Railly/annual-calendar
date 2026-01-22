@@ -15,16 +15,23 @@ import {
   X,
   FileCode,
   BarChart3,
+  RefreshCw,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Calendar,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import {
-  generateGitHubYearData,
-  generateRepoSessions,
   getContributionBg,
   type DayContribution,
   type RepoWorkSession,
+  type GitHubYearStats,
+  generateGitHubYearData,
+  generateRepoSessions,
 } from "@/lib/github-data"
 import { cn } from "@/lib/utils"
 
@@ -317,10 +324,18 @@ function SessionDetailSheet({
   )
 }
 
-export function StatsDialog({ year }: { year: number }) {
+interface StatsDialogProps {
+  year: number
+  githubData: GitHubYearStats
+  isUsingMockData?: boolean
+  lastSynced?: string
+  onSync?: () => Promise<boolean>
+  isSyncing?: boolean
+}
+
+export function StatsDialog({ year, githubData, isUsingMockData, lastSynced, onSync, isSyncing }: StatsDialogProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
-  const githubData = useMemo(() => generateGitHubYearData(year), [year])
 
   return (
     <DialogPrimitive.Root>
@@ -333,6 +348,7 @@ export function StatsDialog({ year }: { year: number }) {
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 bg-black/40 z-50 animate-in fade-in-0 duration-200" />
         <DialogPrimitive.Content className="fixed right-0 top-0 h-full w-full max-w-sm bg-background border-l border-border shadow-2xl z-50 animate-in slide-in-from-right duration-300 overflow-y-auto">
+          <DialogPrimitive.Description className="sr-only">GitHub year statistics and sync options</DialogPrimitive.Description>
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold text-foreground">Year in Code</h2>
@@ -342,6 +358,40 @@ export function StatsDialog({ year }: { year: number }) {
                 </button>
               </DialogPrimitive.Close>
             </div>
+            
+            {/* Sync status */}
+            {isUsingMockData && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Using sample data. Connect GitHub to see real contributions.
+                </p>
+                {onSync && (
+                  <button 
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300 hover:underline disabled:opacity-50"
+                  >
+                    {isSyncing ? "Syncing..." : "Sync now"}
+                  </button>
+                )}
+              </div>
+            )}
+            {!isUsingMockData && lastSynced && (
+              <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  Last synced: {new Date(lastSynced).toLocaleDateString()}
+                </p>
+                {onSync && (
+                  <button 
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    className="text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:underline disabled:opacity-50"
+                  >
+                    {isSyncing ? "Syncing..." : "Refresh"}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="p-4 rounded-lg bg-muted/50">
@@ -421,13 +471,276 @@ export function StatsDialog({ year }: { year: number }) {
   )
 }
 
+// Helper to get activity level label
+function getActivityLabel(level: 0 | 1 | 2 | 3 | 4): string {
+  const labels = ["No activity", "Light activity", "Moderate activity", "High activity", "Intense activity"]
+  return labels[level]
+}
+
+// Helper to get contribution level based on commits
+function getContributionLevel(commits: number): 0 | 1 | 2 | 3 | 4 {
+  if (commits === 0) return 0
+  if (commits <= 3) return 1
+  if (commits <= 6) return 2
+  if (commits <= 10) return 3
+  return 4
+}
+
+// Helper to get heat square size based on level
+function getHeatSquareSize(level: 0 | 1 | 2 | 3 | 4): string {
+  const sizes = ["w-0 h-0", "w-3 h-3", "w-4 h-4", "w-5 h-5", "w-6 h-6"]
+  return sizes[level]
+}
+
+// Day Detail Sheet Component
+function DayDetailSheet({
+  day,
+  contribution,
+  githubData,
+  open,
+  onClose,
+  onPrev,
+  onNext,
+  year,
+}: {
+  day: { date: Date; dayIndex: number } | null
+  contribution: DayContribution | null
+  githubData: GitHubYearStats
+  open: boolean
+  onClose: () => void
+  onPrev: () => void
+  onNext: () => void
+  year: number
+}) {
+  if (!day) return null
+
+  const dayOfYear = day.dayIndex + 1
+  const weekOfYear = Math.ceil(dayOfYear / 7)
+  const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6
+  const level = contribution ? getContributionLevel(contribution.commits) : 0
+  
+  // Calculate stats
+  const activeDays = Array.from(githubData.contributions.values()).filter(c => c.commits > 0).length
+  const avgDailyCommits = activeDays > 0 ? githubData.totalCommits / activeDays : 0
+  const totalYearLines = githubData.totalLinesAdded + githubData.totalLinesDeleted
+  
+  // Check if day is in current streak (simple check: is it recent and has contributions)
+  const today = new Date()
+  const dayDate = new Date(day.date)
+  const daysAgo = Math.floor((today.getTime() - dayDate.getTime()) / (1000 * 60 * 60 * 24))
+  const isInCurrentStreak = contribution && contribution.commits > 0 && daysAgo <= githubData.currentStreak
+
+  const formattedDate = day.date.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+
+  const dateStr = day.date.toISOString().split("T")[0]
+  const githubUrl = `https://github.com?tab=overview&from=${dateStr}&to=${dateStr}`
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 bg-black/40 z-50 animate-in fade-in-0 duration-200" />
+        <DialogPrimitive.Content className="fixed right-0 top-0 h-full w-full max-w-md bg-background border-l border-border shadow-2xl z-50 animate-in slide-in-from-right duration-300 overflow-y-auto">
+          <DialogPrimitive.Description className="sr-only">Day contribution details</DialogPrimitive.Description>
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-foreground">{formattedDate}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-muted-foreground">{getActivityLabel(level)}</span>
+                  {isWeekend && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">Weekend</span>
+                  )}
+                </div>
+              </div>
+              <DialogPrimitive.Close asChild>
+                <button className="p-2 rounded-md hover:bg-muted transition-colors">
+                  <X className="h-5 w-5 text-muted-foreground" />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-4 py-2 border-y border-border">
+              <button onClick={onPrev} className="p-1.5 rounded hover:bg-muted transition-colors">
+                <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <span className="text-xs text-muted-foreground">
+                Day {dayOfYear} · Week {weekOfYear}
+              </span>
+              <button onClick={onNext} className="p-1.5 rounded hover:bg-muted transition-colors">
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Streak banner */}
+            {isInCurrentStreak && (
+              <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center gap-2">
+                <Flame className="h-4 w-4 text-orange-500" />
+                <span className="text-sm font-medium text-orange-600 dark:text-orange-400">
+                  Part of your {githubData.currentStreak}-day streak!
+                </span>
+              </div>
+            )}
+
+            {contribution && contribution.commits > 0 ? (
+              <>
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <GitCommit className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="text-xs text-muted-foreground">Commits</span>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">{contribution.commits}</p>
+                    {avgDailyCommits > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {contribution.commits > avgDailyCommits ? "+" : ""}
+                        {Math.round(((contribution.commits - avgDailyCommits) / avgDailyCommits) * 100)}% vs avg
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Code2 className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="text-xs text-muted-foreground">Net Lines</span>
+                    </div>
+                    <p className={cn(
+                      "text-xl font-bold",
+                      contribution.linesAdded - contribution.linesDeleted >= 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      {contribution.linesAdded - contribution.linesDeleted >= 0 ? "+" : ""}
+                      {contribution.linesAdded - contribution.linesDeleted}
+                    </p>
+                    {totalYearLines > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {((contribution.linesAdded + contribution.linesDeleted) / totalYearLines * 100).toFixed(1)}% of year
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Plus className="h-3.5 w-3.5 text-green-500" />
+                      <span className="text-xs text-muted-foreground">Added</span>
+                    </div>
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                      +{formatNumber(contribution.linesAdded)}
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Minus className="h-3.5 w-3.5 text-red-500" />
+                      <span className="text-xs text-muted-foreground">Deleted</span>
+                    </div>
+                    <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                      -{formatNumber(contribution.linesDeleted)}
+                    </p>
+                  </div>
+
+                  {(contribution.prsOpened > 0 || contribution.prsMerged > 0) && (
+                    <>
+                      {contribution.prsOpened > 0 && (
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <GitPullRequest className="h-3.5 w-3.5 text-green-500" />
+                            <span className="text-xs text-muted-foreground">PRs Opened</span>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{contribution.prsOpened}</p>
+                        </div>
+                      )}
+                      {contribution.prsMerged > 0 && (
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <GitMerge className="h-3.5 w-3.5 text-purple-500" />
+                            <span className="text-xs text-muted-foreground">PRs Merged</span>
+                          </div>
+                          <p className="text-lg font-bold text-foreground">{contribution.prsMerged}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Repos worked on */}
+                {contribution.repos.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Repos worked on</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {contribution.repos.map((repo) => {
+                        const colors = getRepoColor(repo)
+                        return (
+                          <span
+                            key={repo}
+                            className="text-xs px-2 py-1 rounded"
+                            style={{
+                              backgroundColor: colors.lightFill,
+                              borderLeft: `3px solid ${colors.borderColor}`,
+                            }}
+                          >
+                            {repo}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="py-12 text-center">
+                <Calendar className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                <p className="text-muted-foreground">No contributions on this day</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Rest days are important too!</p>
+              </div>
+            )}
+
+            {/* View on GitHub button */}
+            <a
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-medium text-sm hover:opacity-90 transition-opacity"
+            >
+              <ExternalLink className="h-4 w-4" />
+              View on GitHub
+            </a>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  )
+}
+
 interface GitHubYearViewProps {
   year: number
   selectedRepos: string[]
   onReposChange: (repos: string[]) => void
+  githubData: GitHubYearStats
+  repoSessions: RepoWorkSession[]
+  isUsingMockData?: boolean
+  lastSynced?: string
+  onSync?: () => Promise<boolean>
+  isSyncing?: boolean
 }
 
-export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYearViewProps) {
+export function GitHubYearView({ 
+  year, 
+  selectedRepos, 
+  onReposChange,
+  githubData,
+  repoSessions,
+  isUsingMockData,
+  lastSynced,
+  onSync,
+  isSyncing,
+}: GitHubYearViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const { resolvedTheme } = useTheme()
@@ -435,9 +748,10 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
 
   const [selectedSession, setSelectedSession] = useState<RepoWorkSession | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-
-  const githubData = useMemo(() => generateGitHubYearData(year), [year])
-  const repoSessions = useMemo(() => generateRepoSessions(githubData.contributions), [githubData])
+  
+  // Day detail sheet state
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null)
+  const [daySheetOpen, setDaySheetOpen] = useState(false)
 
   const allRepos = useMemo(() => {
     const repoSet = new Set<string>()
@@ -600,9 +914,77 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
     setSheetOpen(true)
   }
 
+  const handleDayClick = (dayIndex: number) => {
+    setSelectedDayIndex(dayIndex)
+    setDaySheetOpen(true)
+  }
+
+  const handlePrevDay = () => {
+    if (selectedDayIndex !== null && selectedDayIndex > 0) {
+      setSelectedDayIndex(selectedDayIndex - 1)
+    }
+  }
+
+  const handleNextDay = () => {
+    const totalDays = gridData.flat().filter(Boolean).length
+    if (selectedDayIndex !== null && selectedDayIndex < totalDays - 1) {
+      setSelectedDayIndex(selectedDayIndex + 1)
+    }
+  }
+
+  // Get selected day data for the sheet
+  const selectedDayData = useMemo(() => {
+    if (selectedDayIndex === null) return null
+    const flatDays = gridData.flat().filter(Boolean)
+    const day = flatDays[selectedDayIndex]
+    if (!day) return null
+    return {
+      date: day.date,
+      dayIndex: selectedDayIndex,
+      contribution: day.contribution,
+    }
+  }, [selectedDayIndex, gridData])
+
   return (
     <TooltipPrimitive.Provider delayDuration={800} skipDelayDuration={300}>
       <div className="h-full flex flex-col">
+        {/* Data Status Banner */}
+        {isUsingMockData && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <span className="text-xs text-amber-600 dark:text-amber-400 flex-1">
+              Showing demo data. Sign in with GitHub to see your real contributions.
+            </span>
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={isSyncing}
+                className="text-xs font-medium px-2 py-1 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 transition-colors flex items-center gap-1"
+              >
+                {isSyncing && <RefreshCw className="h-3 w-3 animate-spin" />}
+                {isSyncing ? "Syncing..." : "Connect GitHub"}
+              </button>
+            )}
+          </div>
+        )}
+        {!isUsingMockData && lastSynced && (
+          <div className="flex items-center justify-between px-4 py-2 bg-emerald-500/10 border-b border-emerald-500/20">
+            <span className="text-xs text-emerald-600 dark:text-emerald-400">
+              Last synced: {new Date(lastSynced).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+            {onSync && (
+              <button
+                onClick={onSync}
+                disabled={isSyncing}
+                className="text-xs font-medium px-2 py-1 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors flex items-center gap-1"
+              >
+                {isSyncing && <RefreshCw className="h-3 w-3 animate-spin" />}
+                {isSyncing ? "Syncing..." : "Refresh"}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Calendar Grid */}
         <div ref={scrollRef} className="flex-1 overflow-auto">
           <div ref={gridRef} className="min-w-[1000px]">
@@ -628,56 +1010,68 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
                       const isMonthStart = day.dayOfMonth === 1
 
                       return (
-                        <div
-                          key={day.date.toISOString()}
-                          data-cell
-                          className={cn(
-                            "aspect-square border-r border-border/20 relative cursor-pointer transition-colors bg-background",
-                            isWeekend && "weekend-day",
-                            past && !today && "past-day-stripes",
-                            today && "today-highlight",
-                            isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
-                            "hover:bg-muted/30",
-                          )}
-                        >
-                          {/* Month label */}
-                          {isMonthStart && (
-                            <span className="absolute top-0.5 left-0.5 bg-zinc-700 dark:bg-zinc-600 text-white text-[7px] font-bold px-1 py-px rounded tracking-wide leading-none z-10">
-                              {MONTHS[day.month]}
-                            </span>
-                          )}
+                        <GitHubDayTooltip key={day.date.toISOString()} date={day.date} contribution={contribution}>
+                          <div 
+                            data-cell
+                            className={cn(
+                              "aspect-square border-r border-border/20 relative cursor-pointer transition-colors bg-background",
+                              isWeekend && "weekend-day",
+                              past && !today && "past-day-stripes",
+                              today && "today-highlight",
+                              isMonthStart && "border-l-[3px] border-l-zinc-400 dark:border-l-zinc-500",
+                              "hover:bg-muted/30",
+                            )} 
+                            onClick={() => handleDayClick(day.dayIndex)}
+                          >
+                            {/* Month label */}
+                            {isMonthStart && (
+                              <span className="absolute top-0 left-0 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-[7px] font-bold px-1 py-px tracking-wide leading-none z-10">
+                                {MONTHS[day.month]}
+                              </span>
+                            )}
 
-                          {/* Day header */}
-                          <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
-                            <span
-                              className={cn(
-                                "text-[7px] font-medium uppercase leading-none",
-                                today ? "today-text-light-muted" : "text-muted-foreground/60",
-                              )}
-                            >
-                              {DAYS[day.dayOfWeek]}
-                            </span>
-                            <span
-                              className={cn(
-                                "text-[10px] font-bold leading-none",
-                                today ? "today-text-light" : "text-foreground",
-                              )}
-                            >
-                              {day.dayOfMonth}
-                            </span>
+                            {/* Day header */}
+                            <div className="absolute top-0.5 right-0.5 flex items-center gap-0.5">
+                              <span
+                                className={cn(
+                                  "text-[7px] font-medium uppercase leading-none",
+                                  today ? "today-text-light-muted" : "text-muted-foreground/60",
+                                )}
+                              >
+                                {DAYS[day.dayOfWeek]}
+                              </span>
+                              <span
+                                className={cn(
+                                  "text-[10px] font-bold leading-none",
+                                  today ? "today-text-light" : "text-foreground",
+                                )}
+                              >
+                                {day.dayOfMonth}
+                              </span>
+                            </div>
+
+                            {/* Centered scaled heat square */}
+                            {contribution && contribution.commits > 0 && (
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="flex flex-col items-center">
+                                  <div
+                                    className={cn(
+                                      "rounded-sm",
+                                      getHeatSquareSize(contribution.level),
+                                      contribution.commits >= 5 && "mt-1",
+                                    )}
+                                    style={{ backgroundColor: getContributionBg(contribution.level, isDark) }}
+                                  />
+                                  {contribution.commits >= 5 && (
+                                    <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                      {contribution.commits}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
-
-                          {/* Small heat indicator in top-left */}
-                          {contribution && contribution.commits > 0 && (
-                            <div
-                              className={cn(
-                                "absolute w-1.5 h-1.5 rounded-sm",
-                                isMonthStart ? "top-3.5 left-0.5" : "top-0.5 left-0.5",
-                              )}
-                              style={{ backgroundColor: getContributionBg(contribution.level, isDark) }}
-                            />
-                          )}
-                        </div>
+                        </GitHubDayTooltip>
                       )
                     })}
                   </div>
@@ -735,6 +1129,16 @@ export function GitHubYearView({ year, selectedRepos, onReposChange }: GitHubYea
         </div>
 
         <SessionDetailSheet session={selectedSession} open={sheetOpen} onClose={() => setSheetOpen(false)} />
+        <DayDetailSheet 
+          day={selectedDayData} 
+          contribution={selectedDayData ? selectedDayData.contribution : null} 
+          githubData={githubData} 
+          open={daySheetOpen} 
+          onClose={() => setDaySheetOpen(false)} 
+          onPrev={handlePrevDay} 
+          onNext={handleNextDay} 
+          year={year} 
+        />
       </div>
     </TooltipPrimitive.Provider>
   )
